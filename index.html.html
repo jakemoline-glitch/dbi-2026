@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 Dirty Birdie Invitational</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--green:#1a4a2e;--green-mid:#2d6e47;--green-light:#3d9962;--gold:#c9a227;--gold-light:#e8c04a;--gold-pale:#f5e199;--cream:#f9f5e8;--dark:#0f1f17;--text:#1a2e20;--text-muted:#5a7060;--border:#c9d4c2;--white:#ffffff;--red:#8b2020;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Barlow',sans-serif;background:var(--dark);color:var(--text);min-height:100vh;}
+#loading-screen{position:fixed;inset:0;background:var(--dark);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px;}
+#loading-screen .logo{font-family:'Bebas Neue',sans-serif;font-size:72px;color:var(--gold);letter-spacing:6px;}
+#loading-screen p{color:rgba(255,255,255,0.5);font-family:'Barlow Condensed',sans-serif;letter-spacing:2px;text-transform:uppercase;font-size:13px;}
+.spinner{width:32px;height:32px;border:3px solid rgba(201,162,39,0.2);border-top-color:var(--gold);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#login-screen{position:fixed;inset:0;background:var(--dark);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:9998;padding:20px;}
+.login-card{background:var(--white);border-radius:16px;padding:36px 32px;max-width:380px;width:100%;text-align:center;}
+.login-card .dbi-logo{font-family:'Bebas Neue',sans-serif;font-size:52px;color:var(--green);letter-spacing:4px;}
+.login-card h2{font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--text-muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:24px;margin-top:4px;}
+.login-card select{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:8px;font-size:16px;font-family:'Barlow',sans-serif;color:var(--text);background:var(--white);margin-bottom:14px;}
+.login-card button{width:100%;padding:13px;background:var(--green);color:var(--gold-light);border:none;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;}
+.login-card button:hover{background:var(--green-mid);}
+.site-header{background:linear-gradient(135deg,var(--dark) 0%,var(--green) 60%,var(--dark) 100%);border-bottom:3px solid var(--gold);position:relative;overflow:hidden;}
+.site-header::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(201,162,39,0.03) 20px,rgba(201,162,39,0.03) 40px);}
+.header-inner{max-width:1200px;margin:0 auto;padding:16px 20px;display:flex;align-items:center;gap:14px;position:relative;z-index:1;}
+.logo-circle{width:56px;height:56px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--dark);border:3px solid rgba(255,255,255,0.3);flex-shrink:0;}
+.header-text h1{font-family:'Bebas Neue',sans-serif;font-size:34px;color:var(--gold);letter-spacing:3px;line-height:1;}
+.header-text p{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:rgba(255,255,255,0.6);letter-spacing:2px;text-transform:uppercase;margin-top:3px;}
+.user-pill{margin-left:auto;background:rgba(255,255,255,0.1);border:1px solid rgba(201,162,39,0.4);border-radius:20px;padding:6px 14px;display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0;}
+.user-pill span{font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--gold-light);letter-spacing:1px;}
+.user-pill:hover{background:rgba(255,255,255,0.15);}
+.nav-bar{background:var(--green);border-bottom:2px solid var(--gold);position:sticky;top:0;z-index:100;}
+.nav-inner{max-width:1200px;margin:0 auto;display:flex;overflow-x:auto;scrollbar-width:none;}
+.nav-inner::-webkit-scrollbar{display:none;}
+.nav-btn{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.7);background:none;border:none;cursor:pointer;padding:12px 14px;border-bottom:3px solid transparent;white-space:nowrap;transition:color 0.2s,border-color 0.2s;}
+.nav-btn:hover{color:var(--gold-light);}
+.nav-btn.active{color:var(--gold);border-bottom-color:var(--gold);}
+.page-wrap{max-width:1200px;margin:0 auto;padding:22px 20px 60px;}
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--gold);letter-spacing:2px;margin-bottom:4px;}
+.section-sub{font-size:13px;color:var(--text-muted);margin-bottom:18px;}
+.card{background:var(--white);border-radius:10px;border:1px solid var(--border);overflow:hidden;margin-bottom:16px;}
+.card-header{background:var(--green);color:var(--white);padding:11px 16px;display:flex;align-items:center;gap:10px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;letter-spacing:1px;text-transform:uppercase;}
+.card-header .badge{background:var(--gold);color:var(--dark);border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;}
+.card-body{padding:16px;}
+.data-table{width:100%;border-collapse:collapse;font-size:13px;}
+.data-table th{background:var(--cream);color:var(--green);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:8px 10px;text-align:left;border-bottom:2px solid var(--border);}
+.data-table td{padding:8px 10px;border-bottom:1px solid #eef0ed;vertical-align:middle;}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table tr:hover td{background:#f7f9f6;}
+.lb-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #eef0ed;transition:background 0.15s;}
+.lb-row:last-child{border-bottom:none;}
+.lb-row:hover{background:#f7f9f6;}
+.lb-rank-num{font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--text-muted);width:26px;text-align:center;flex-shrink:0;}
+.lb-rank-num.top1{color:var(--gold);font-size:24px;}
+.lb-rank-num.top2{color:#9e9e9e;}
+.lb-rank-num.top3{color:#8b6432;}
+.lb-avatar{width:32px;height:32px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:12px;color:var(--gold);flex-shrink:0;}
+.lb-name{flex:1;font-size:14px;font-weight:600;color:var(--text);}
+.lb-sub{font-size:11px;color:var(--text-muted);margin-top:1px;}
+.lb-shootout{color:var(--green-light);font-size:10px;font-weight:700;}
+.lb-total{font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--green);min-width:42px;text-align:right;}
+.lb-total.top1{color:var(--gold);font-size:28px;}
+.lb-pts-label{font-size:10px;color:var(--text-muted);text-align:right;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;text-transform:uppercase;}
+.rnd-chips{display:flex;gap:3px;margin-top:3px;flex-wrap:wrap;}
+.rnd-chip{font-size:9px;padding:1px 5px;border-radius:8px;background:var(--cream);color:var(--text-muted);font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:0.5px;}
+.rnd-chip.scored{background:var(--green);color:var(--gold-light);}
+.score-panel{background:var(--white);border-radius:10px;border:1px solid var(--border);margin-bottom:16px;overflow:hidden;}
+.score-panel-hdr{background:var(--green);padding:11px 16px;display:flex;align-items:center;justify-content:space-between;}
+.score-panel-hdr h3{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--white);}
+.my-tag{background:var(--gold);color:var(--dark);border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;font-family:'Barlow Condensed',sans-serif;}
+.hole-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:5px;padding:14px;}
+.hole-divider{grid-column:1/-1;height:1px;background:var(--border);margin:2px 0;}
+.hole-cell{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.hole-lbl{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:1px;}
+.hi{width:40px;height:38px;border:1px solid var(--border);border-radius:6px;text-align:center;font-size:16px;font-weight:700;font-family:'Barlow',sans-serif;color:var(--text);background:var(--white);padding:0;}
+.hi:focus{outline:2px solid var(--green-light);border-color:var(--green-light);}
+.hi.eagle{background:#fff3cd;color:#856404;border-color:#ffc107;}
+.hi.birdie{background:#d1e7dd;color:#0a5c36;border-color:#2d9b6b;}
+.hi.par{background:#e8f4ed;color:#1a4a2e;border-color:#9fd4b3;}
+.hi.bogey{background:#fff0f0;color:#842029;border-color:#f1aeb5;}
+.hi.double{background:#f8d7da;color:#842029;border-color:#e87b87;}
+.hi.ro{background:#f8f8f8;color:var(--text-muted);cursor:default;border-color:transparent;}
+.totals-bar{display:flex;gap:8px;padding:0 14px 12px;flex-wrap:wrap;}
+.tot-item{background:var(--cream);border:1px solid var(--border);border-radius:6px;padding:6px 12px;text-align:center;min-width:60px;}
+.tot-lbl{font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;font-family:'Barlow Condensed',sans-serif;}
+.tot-val{font-size:18px;font-weight:700;color:var(--green);font-family:'Bebas Neue',sans-serif;}
+.scorecard-wrap{overflow-x:auto;}
+.sc{border-collapse:collapse;font-size:12px;min-width:900px;width:100%;}
+.sc th{background:var(--green);color:var(--gold-light);padding:6px 7px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;}
+.sc th.nc{text-align:left;min-width:120px;}
+.sc td{padding:4px 5px;text-align:center;border-bottom:1px solid #eef0ed;border-right:1px solid #f0f0f0;}
+.sc td.nc{text-align:left;font-weight:600;font-size:12px;padding-left:8px;white-space:nowrap;}
+.sc tr:last-child td{border-bottom:none;}
+.sc .par-row{background:var(--cream);font-size:10px;color:var(--text-muted);}
+.sc .tot-cell{background:var(--cream);font-weight:700;color:var(--green);}
+.sc .me-row td{background:#f0f8f3;}
+.sc .can-edit-row td{background:#fffdf0;}
+.sc-hi{width:30px;height:24px;border:1px solid var(--border);border-radius:3px;text-align:center;font-size:12px;font-weight:700;font-family:'Barlow',sans-serif;color:var(--text);background:var(--white);padding:0;}
+.sc-hi.eagle{background:#fff3cd;color:#856404;}
+.sc-hi.birdie{background:#d1e7dd;color:#0a5c36;}
+.sc-hi.par{background:#e8f4ed;color:#1a4a2e;}
+.sc-hi.bogey{background:#fff0f0;color:#842029;}
+.sc-hi.double{background:#f8d7da;color:#842029;}
+.sc-hi.ro{background:transparent;border-color:transparent;color:var(--text-muted);cursor:default;}
+.format-box{background:var(--cream);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:11px 14px;margin-bottom:14px;font-size:13px;line-height:1.6;}
+.format-box strong{color:var(--green);}
+.pl{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
+.pl-item{background:var(--green);color:var(--gold-light);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:600;font-family:'Barlow Condensed',sans-serif;}
+.round-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;}
+.round-tab{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--white);color:var(--text-muted);cursor:pointer;transition:all 0.15s;}
+.round-tab:hover{border-color:var(--green);color:var(--green);}
+.round-tab.active{background:var(--green);color:var(--gold-light);border-color:var(--green);}
+.round-section{display:none;}
+.round-section.active{display:block;}
+.golfer-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;}
+.golfer-card{background:var(--white);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px;}
+.g-avatar{width:38px;height:38px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:14px;color:var(--gold);flex-shrink:0;}
+.group-card{background:var(--white);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden;}
+.group-hdr{background:var(--green);padding:8px 14px;display:flex;align-items:center;gap:8px;color:var(--white);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;}
+.group-players{padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px;}
+.so-row{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #eef0ed;}
+.so-row:last-child{border-bottom:none;}
+.so-stat{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;}
+.so-active{background:#d1e7dd;color:#0a5c36;}
+.so-eliminated{background:#f8d7da;color:#842029;}
+.so-champion{background:var(--gold-pale);color:var(--dark);}
+.btn{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:8px 18px;border-radius:7px;border:none;cursor:pointer;transition:transform 0.1s;}
+.btn:active{transform:scale(0.97);}
+.btn-primary{background:var(--green);color:var(--gold-light);}
+.btn-primary:hover{background:var(--green-mid);}
+.btn-gold{background:var(--gold);color:var(--dark);}
+.btn-gold:hover{background:var(--gold-light);}
+.btn-sm{padding:5px 11px;font-size:11px;}
+.flex-gap{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+.pts-chip{display:inline-block;background:var(--green);color:var(--gold-light);border-radius:20px;padding:2px 9px;font-size:12px;font-weight:700;font-family:'Barlow Condensed',sans-serif;}
+.pts-chip.zero{background:#e8e8e8;color:#999;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--green);color:var(--gold-light);padding:10px 22px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;letter-spacing:1px;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#4CAF50;display:inline-block;margin-right:4px;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+.sel{border:1px solid var(--border);border-radius:5px;padding:4px 6px;font-size:12px;font-family:'Barlow',sans-serif;color:var(--text);background:var(--white);width:100%;}
+.agenda-day{margin-bottom:24px;}
+.agenda-day-header{background:var(--green);color:var(--gold);font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:2px;padding:9px 14px;border-radius:8px 8px 0 0;}
+.agenda-day-header span{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:rgba(255,255,255,0.6);letter-spacing:1px;text-transform:uppercase;margin-left:8px;font-weight:400;}
+.agenda-item{display:flex;border-bottom:1px solid #eef0ed;background:var(--white);}
+.agenda-item:last-child{border-bottom:none;border-radius:0 0 8px 8px;}
+.agenda-time{min-width:140px;padding:10px 12px;font-size:12px;font-weight:600;color:var(--green);font-family:'Barlow Condensed',sans-serif;letter-spacing:0.5px;border-right:2px solid var(--border);background:var(--cream);}
+.agenda-desc{padding:10px 12px;font-size:13px;color:var(--text);line-height:1.5;}
+.agenda-desc .hl{font-weight:700;color:var(--green);}
+@media(max-width:600px){.header-text h1{font-size:24px;}.hi{width:34px;height:34px;font-size:14px;}.hole-grid{gap:3px;padding:10px;}}
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="logo">DBI</div>
+  <div class="spinner"></div>
+  <p>Loading 2026 Dirty Birdie Invitational...</p>
+</div>
+
+<div id="login-screen">
+  <div class="login-card">
+    <div class="dbi-logo">DBI</div>
+    <h2>2026 Dirty Birdie Invitational</h2>
+    <select id="login-select"><option value="">Select your name...</option></select>
+    <button onclick="doLogin()">Enter the Clubhouse ⛳</button>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+<header class="site-header">
+  <div class="header-inner">
+    <div class="logo-circle">DBI</div>
+    <div class="header-text">
+      <h1>Dirty Birdie Invitational</h1>
+      <p>2026 &nbsp;·&nbsp; Wild Horse &amp; Bayside &nbsp;·&nbsp; July 6–8</p>
+    </div>
+    <div class="user-pill" onclick="logout()" title="Tap to switch user">
+      <span id="user-label">—</span>
+      <span style="color:rgba(255,255,255,0.4);font-size:10px;">▼</span>
+    </div>
+  </div>
+</header>
+<nav class="nav-bar">
+  <div class="nav-inner">
+    <button class="nav-btn active" onclick="showTab('leaderboard',this)">🏆 Leaderboard</button>
+    <button class="nav-btn" onclick="showTab('myscores',this)">✏️ My Scores</button>
+    <button class="nav-btn" onclick="showTab('scorecard',this)">⛳ Scorecards</button>
+    <button class="nav-btn" onclick="showTab('pairings',this)">👥 Pairings</button>
+    <button class="nav-btn" onclick="showTab('shootout',this)">🎯 Shootout</button>
+    <button class="nav-btn" onclick="showTab('golfers',this)">📋 Golfers</button>
+    <button class="nav-btn" onclick="showTab('agenda',this)">📅 Agenda</button>
+    <button class="nav-btn" onclick="showTab('formats',this)">📖 Formats</button>
+    <button class="nav-btn" onclick="showTab('admin',this)">⚡ Scoring</button>
+    <button class="nav-btn admin-only" onclick="showTab('sheets',this)" style="display:none;">📊 Sheets</button>
+  </div>
+</nav>
+<div class="page-wrap">
+
+<!-- LEADERBOARD -->
+<div id="tab-leaderboard" class="tab-content active">
+  <div class="section-title">Overall Leaderboard</div>
+  <p class="section-sub"><span class="live-dot"></span>Live · Updates instantly as scores come in · Top 10 advance to Shootout</p>
+  <div class="card">
+    <div class="card-header"><span>Individual Standings</span><span class="badge" id="lb-badge">Loading...</span></div>
+    <div id="lb-list" style="padding:0;"></div>
+  </div>
+</div>
+
+<!-- MY SCORES -->
+<div id="tab-myscores" class="tab-content">
+  <div class="section-title">My Scores</div>
+  <p class="section-sub">Enter your scores hole by hole. They save automatically and appear live for everyone.</p>
+  <div class="round-tabs" id="my-rtabs">
+    <button class="round-tab active" onclick="showMyRound(1,this)">Round 1</button>
+    <button class="round-tab" onclick="showMyRound(2,this)">Round 2</button>
+    <button class="round-tab" onclick="showMyRound(3,this)">Round 3</button>
+    <button class="round-tab" onclick="showMyRound(4,this)">Round 4</button>
+    <button class="round-tab" onclick="showMyRound(5,this)">Round 5</button>
+    <button class="round-tab" onclick="showMyRound(6,this)">Round 6</button>
+  </div>
+  <div id="my-scores-content"></div>
+</div>
+
+<!-- SCORECARDS -->
+<div id="tab-scorecard" class="tab-content">
+  <div class="section-title">Live Scorecards</div>
+  <p class="section-sub"><span class="live-dot"></span>Live · All golfers' hole-by-hole scores</p>
+  <div class="round-tabs" id="sc-rtabs">
+    <button class="round-tab active" onclick="showSCRound(1,this)">Round 1</button>
+    <button class="round-tab" onclick="showSCRound(2,this)">Round 2</button>
+    <button class="round-tab" onclick="showSCRound(3,this)">Round 3</button>
+    <button class="round-tab" onclick="showSCRound(4,this)">Round 4</button>
+    <button class="round-tab" onclick="showSCRound(5,this)">Round 5</button>
+    <button class="round-tab" onclick="showSCRound(6,this)">Round 6</button>
+  </div>
+  <div id="scorecard-content"></div>
+</div>
+
+<!-- PAIRINGS -->
+<div id="tab-pairings" class="tab-content">
+  <div class="section-title">Round Pairings</div>
+  <p class="section-sub">Set group assignments and tee times. Save to share with everyone.</p>
+  <div class="round-tabs" id="pair-rtabs">
+    <button class="round-tab active" onclick="showPairRound(1,this)">Round 1</button>
+    <button class="round-tab" onclick="showPairRound(2,this)">Round 2</button>
+    <button class="round-tab" onclick="showPairRound(3,this)">Round 3</button>
+    <button class="round-tab" onclick="showPairRound(4,this)">Round 4</button>
+    <button class="round-tab" onclick="showPairRound(5,this)">Round 5</button>
+    <button class="round-tab" onclick="showPairRound(6,this)">Round 6</button>
+  </div>
+  <div class="flex-gap">
+    <button class="btn btn-gold btn-sm" onclick="savePairings()">💾 Save Pairings</button>
+    <span style="font-size:12px;color:var(--text-muted);">Anyone can update pairings and save them for the group.</span>
+  </div>
+  <div id="pairings-content"></div>
+</div>
+
+<!-- SHOOTOUT -->
+<div id="tab-shootout" class="tab-content">
+  <div class="section-title">🎯 Shootout</div>
+  <p class="section-sub">Top 10 point earners · Wednesday July 8, 7:00pm · Wild Horse</p>
+  <div class="format-box" style="border-left-color:var(--gold);">
+    <strong>Rules:</strong> 7 holes. Seeds 7–10 enter Hole 1 · Seeds 5–6 enter Hole 2 · Seeds 3–4 enter Hole 3 · Seed 2 enters Hole 4 · Seed 1 enters Hole 5.<br>
+    Holes 1–3: 2 highest scores eliminated per hole. Holes 4–7: 1 eliminated per hole. Ties → putt-off.<br>
+    Mulligans: HDCP 20–23 = 1 · HDCP 24+ = 2. Not usable on the putting surface. If hit, must be taken.
+  </div>
+  <div class="card">
+    <div class="card-header"><span>Shootout Field — Top 10</span></div>
+    <div id="shootout-list" style="padding:0;"></div>
+  </div>
+</div>
+
+<!-- GOLFERS -->
+<div id="tab-golfers" class="tab-content">
+  <div class="section-title">The Field</div>
+  <p class="section-sub">20 golfers · Edit names &amp; handicaps · Save to update for everyone</p>
+  <div class="flex-gap"><button class="btn btn-primary" onclick="saveGolfers()">💾 Save Changes</button></div>
+  <div id="golfers-grid" class="golfer-grid"></div>
+</div>
+
+<!-- AGENDA -->
+<div id="tab-agenda" class="tab-content">
+  <div class="section-title">Trip Agenda</div>
+  <p class="section-sub">2026 DBI · July 5–9 · Gothenburg, Nebraska</p>
+  <div class="agenda-day">
+    <div class="agenda-day-header">Sunday, July 5 <span>Travel Day</span></div>
+    <div class="agenda-item"><div class="agenda-time">As Needed</div><div class="agenda-desc">Depart various origins</div></div>
+    <div class="agenda-item"><div class="agenda-time">11:00am+</div><div class="agenda-desc"><span class="hl">Warm-up 18</span> @ Nebraska Dunes (formerly Awarii Dunes), Axtell, NE</div></div>
+    <div class="agenda-item"><div class="agenda-time">3:00pm</div><div class="agenda-desc"><span class="hl">Arrival &amp; Check-in @ Wild Horse</span> — Ben Hogan &amp; Bobby Jones cabins (8 each) + 2 double queen rooms. First come, first serve.</div></div>
+    <div class="agenda-item"><div class="agenda-time">5:30–7:00pm</div><div class="agenda-desc">Dinner — on your own or group dinner in Gothenburg</div></div>
+    <div class="agenda-item"><div class="agenda-time">7:00–9:30pm</div><div class="agenda-desc"><span class="hl">Welcoming Ceremony</span> — Pairings review &amp; Calcutta Auction</div></div>
+  </div>
+  <div class="agenda-day">
+    <div class="agenda-day-header">Monday, July 6 <span>Day 1 — Wild Horse</span></div>
+    <div class="agenda-item"><div class="agenda-time">5:45–6:15am</div><div class="agenda-desc">Wake up — Buzzball time! Get up or face the Piña Colada.</div></div>
+    <div class="agenda-item"><div class="agenda-time">6:30–6:40am</div><div class="agenda-desc">Check-in @ Wild Horse</div></div>
+    <div class="agenda-item"><div class="agenda-time">6:40–7:40am</div><div class="agenda-desc">Breakfast &amp; Warm-up at the course</div></div>
+    <div class="agenda-item"><div class="agenda-time">7:41am</div><div class="agenda-desc"><span class="hl">Morning Tee Times — Round 1</span> (Modified Stableford)</div></div>
+    <div class="agenda-item"><div class="agenda-time">12:16pm</div><div class="agenda-desc"><span class="hl">Afternoon Tee Times — Round 2</span> (4-Person Scramble)</div></div>
+    <div class="agenda-item"><div class="agenda-time">1:10–1:50pm</div><div class="agenda-desc">Grab-and-go lunch &amp; re-pairing</div></div>
+    <div class="agenda-item"><div class="agenda-time">6:00–7:30pm</div><div class="agenda-desc">Dinner at course</div></div>
+    <div class="agenda-item"><div class="agenda-time">7:30pm+</div><div class="agenda-desc">Shenanigans</div></div>
+  </div>
+  <div class="agenda-day">
+    <div class="agenda-day-header">Tuesday, July 7 <span>Day 2 — Bayside (1hr 40min + 1hr time change)</span></div>
+    <div class="agenda-item"><div class="agenda-time">5:45–6:15am</div><div class="agenda-desc">Wake up</div></div>
+    <div class="agenda-item"><div class="agenda-time">6:30–6:45am</div><div class="agenda-desc">Depart for Bayside</div></div>
+    <div class="agenda-item"><div class="agenda-time">7:10–8:00am</div><div class="agenda-desc">Check-in, Breakfast &amp; Warm-up @ Bayside</div></div>
+    <div class="agenda-item"><div class="agenda-time">8:00am</div><div class="agenda-desc"><span class="hl">Morning Tee Times — Round 3</span> (2v2 Best Ball Match Play Nassau)</div></div>
+    <div class="agenda-item"><div class="agenda-time">1:00–2:00pm</div><div class="agenda-desc">Lunch &amp; re-pairing</div></div>
+    <div class="agenda-item"><div class="agenda-time">2:00pm</div><div class="agenda-desc"><span class="hl">Afternoon Tee Times — Round 4</span> (4-Person Shamble)</div></div>
+    <div class="agenda-item"><div class="agenda-time">6:30pm</div><div class="agenda-desc">Eat at course or on the drive home</div></div>
+    <div class="agenda-item"><div class="agenda-time">10:00pm+</div><div class="agenda-desc">Shenanigans</div></div>
+  </div>
+  <div class="agenda-day">
+    <div class="agenda-day-header">Wednesday, July 8 <span>Day 3 — Wild Horse + Shootout</span></div>
+    <div class="agenda-item"><div class="agenda-time">5:45–6:15am</div><div class="agenda-desc">Wake up</div></div>
+    <div class="agenda-item"><div class="agenda-time">6:30–7:30am</div><div class="agenda-desc">Check-in, Breakfast &amp; Warm-up @ Wild Horse</div></div>
+    <div class="agenda-item"><div class="agenda-time">7:30am</div><div class="agenda-desc"><span class="hl">Morning Tee Times — Round 5</span> (Individual Net Score)</div></div>
+    <div class="agenda-item"><div class="agenda-time">12:30–1:10pm</div><div class="agenda-desc">Lunch &amp; re-pairing</div></div>
+    <div class="agenda-item"><div class="agenda-time">1:11pm</div><div class="agenda-desc"><span class="hl">Afternoon Tee Times — Round 6</span> (2v2 Scramble Match Play Nassau)</div></div>
+    <div class="agenda-item"><div class="agenda-time">7:00–8:30pm</div><div class="agenda-desc" style="font-weight:700;color:var(--green);">🎯 SHOOTOUT — Top 10 battle for DBI Champion!</div></div>
+    <div class="agenda-item"><div class="agenda-time">8:30–9:00pm</div><div class="agenda-desc"><span class="hl">Pizza &amp; DBI Trophy Presentations</span></div></div>
+    <div class="agenda-item"><div class="agenda-time">9:00pm+</div><div class="agenda-desc">Shenanigans (if you have the stamina)</div></div>
+  </div>
+  <div class="agenda-day">
+    <div class="agenda-day-header">Thursday, July 9 <span>Departure</span></div>
+    <div class="agenda-item"><div class="agenda-time">7:00–10:00am</div><div class="agenda-desc">Wake up, pack up, clean house, take out all garbage</div></div>
+    <div class="agenda-item"><div class="agenda-time">10:00am</div><div class="agenda-desc"><span class="hl">Checkout</span> — Hit the road</div></div>
+  </div>
+</div>
+
+<!-- FORMATS -->
+<div id="tab-formats" class="tab-content">
+  <div class="section-title">Format Sheet</div>
+  <p class="section-sub">2026 DBI Official Rules &amp; Scoring Reference</p>
+  <div class="card"><div class="card-header"><span>Round 1</span><span class="badge">Wild Horse · Mon AM</span></div><div class="card-body">
+    <p style="font-size:13px;"><strong>Modified Stableford (Individual)</strong> — Quota = 38 – Handicap. Points: Bogey=1, Par=2, Birdie=4, Eagle=8. Best score vs quota wins.</p>
+    <div class="pl"><div class="pl-item">1st→14 pts</div><div class="pl-item">2nd→13</div><div class="pl-item">3rd→12</div><div class="pl-item">↓ -1 per place</div></div>
+  </div></div>
+  <div class="card"><div class="card-header"><span>Round 2</span><span class="badge">Wild Horse · Mon PM</span></div><div class="card-body">
+    <p style="font-size:13px;"><strong>4-Person Scramble</strong> — Texas Scramble Rules (3 drives each). Low team score wins.</p>
+    <div class="pl"><div class="pl-item">1st→7 pts</div><div class="pl-item">2nd→5</div><div class="pl-item">3rd→4</div><div class="pl-item">4th→2</div><div class="pl-item">5th→0</div></div>
+  </div></div>
+  <div class="card"><div class="card-header"><span>Round 3</span><span class="badge">Bayside · Tue AM</span></div><div class="card-body">
+    <p style="font-size:13px;"><strong>2v2 Best Ball Match Play — Nassau.</strong> Lowest individual net score between teams wins each hole.</p>
+    <div class="pl"><div class="pl-item">Front 9 Win→3 pts</div><div class="pl-item">Back 9 Win→3</div><div class="pl-item">Total Win→3</div><div class="pl-item">Winning team bonus→3</div></div>
+  </div></div>
+  <div class="card"><div class="card-header"><span>Round 4</span><span class="badge">Bayside · Tue PM</span></div><div class="card-body">
+    <p style="font-size:13px;"><strong>4-Person Shamble (80% HDCP)</strong> — Best drive selected, all play own ball. Team score = sum of 2 best individual net scores.</p>
+    <div class="pl"><div class="pl-item">1st→10 pts</div><div class="pl-item">2nd→7</div><div class="pl-item">3rd→5</div><div class="pl-item">4th→3</div><div class="pl-item">5th→0</div></div>
+  </div></div>
+  <div class="card"><div class="card-header"><span>Round 5</span><span class="badge">Wild Horse · Wed AM</span></div><div class="card-body">
+    <p style="font-size:13px;"><strong>Individual Net Score</strong> — Gross – Handicap = Net Score. Best net wins.</p>
+    <div class="pl"><div class="pl-item">1st→16 pts</div><div class="pl-item">2nd→15</div><div class="pl-item">3rd→14</div><div class="pl-item">↓ -1 per place</div></div>
+  </div></div>
+  <div class="card"><div class="card-header"><span>Round 6</span><span class="badge">Wild Horse · Wed PM</span></div><div class="card-body">
+    <p style="font-size:13px;"><strong>2v2 Scramble Match Play — Nassau.</strong> A-Player uses 70% HDCP · B-Player uses 30% HDCP. Lowest 2-person scramble net score wins each hole.</p>
+    <div class="pl"><div class="pl-item">Front 9 Win→3 pts</div><div class="pl-item">Back 9 Win→3</div><div class="pl-item">Total Win→3</div><div class="pl-item">Winning team bonus→3</div></div>
+  </div></div>
+  <div class="card"><div class="card-header" style="background:var(--gold);color:var(--dark);"><span>🎯 Shootout</span><span class="badge" style="background:var(--dark);color:var(--gold);">Wed 7pm</span></div><div class="card-body">
+    <p style="font-size:13px;">Top 10 qualifiers. Entry by seed: 7–10=Hole 1 · 5–6=Hole 2 · 3–4=Hole 3 · 2=Hole 4 · 1=Hole 5. Holes 1–3: 2 eliminated. Holes 4–7: 1 eliminated. Ties → putt-off. Mulligans: HDCP 20–23=1 · 24+=2. Cannot use on putting surface — if hit, must be taken.</p>
+  </div></div>
+  <div class="card"><div class="card-header">Packing List</div><div class="card-body">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:13px;">
+      <div>✅ 24-pack beer or equivalent</div><div>✅ Bluetooth speaker</div>
+      <div>✅ Bug spray &amp; Sunscreen</div><div>✅ Rangefinder</div>
+      <div>✅ Plenty of golf balls</div><div>✅ Tees &amp; ball markers</div>
+      <div>✅ Golf gloves</div><div>✅ Rain gear &amp; umbrella</div>
+      <div>✅ Cooler &amp; lawn chairs</div><div>✅ Sunglasses</div>
+    </div>
+    <p style="margin-top:10px;font-size:13px;color:var(--red);font-weight:700;">⚠️ Someone needs: Laptop &amp; projector · GOLD CHAMPION'S JACKETS · Last year's trophies!!</p>
+  </div></div>
+</div>
+
+<!-- SCORING ADMIN -->
+<div id="tab-admin" class="tab-content"></div>
+
+<!-- GOOGLE SHEETS BACKUP (admin only) -->
+<div id="tab-sheets" class="tab-content">
+  <div class="section-title">📊 Google Sheets Backup</div>
+  <p class="section-sub">Export all scores and leaderboard data to Google Sheets as a backup. Admin only.</p>
+  <div class="card"><div class="card-header"><span>Sheets Configuration</span><span class="badge">Admin</span></div>
+  <div class="card-body">
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Paste your Google Sheets ID below (from the URL: docs.google.com/spreadsheets/d/<strong>SHEET_ID</strong>/edit). The sheet must have "Anyone with the link can edit" sharing enabled, and you need to set up the Apps Script web app endpoint.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+      <input type="text" id="sheets-id" placeholder="Google Sheets ID or Apps Script URL" value="${localStorage.getItem('dbi26_sheets_url')||''}"
+        style="border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:13px;font-family:'Barlow',sans-serif;flex:1;min-width:200px;">
+      <button class="btn btn-primary" onclick="saveSheetConfig()">Save</button>
+    </div>
+    <div style="background:var(--cream);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+      <strong style="color:var(--green);">Quick Setup:</strong><br>
+      1. Open your Google Sheet → Extensions → Apps Script<br>
+      2. Paste the script below → Deploy → New deployment → Web app → Anyone can access → Copy the URL<br>
+      3. Paste that URL above and save
+      <button class="btn btn-sm btn-gold" style="margin-top:8px;" onclick="copyAppsScript()">📋 Copy Apps Script Code</button>
+    </div>
+  </div></div>
+
+  <div class="card"><div class="card-header" style="justify-content:space-between;"><span>Export Data</span>
+    <button class="btn btn-gold btn-sm" onclick="exportAllToSheets()">⬆️ Export All to Sheets</button>
+  </div><div class="card-body" style="padding:0;">
+    <table class="data-table"><thead><tr><th>Export</th><th>Description</th><th>Action</th></tr></thead><tbody>
+      <tr><td><strong>Leaderboard</strong></td><td>All golfers, DBI points per round, totals</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet('leaderboard')">Export</button></td></tr>
+      <tr><td><strong>Round 1 Scores</strong></td><td>Hole-by-hole + Stableford + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(1)">Export</button></td></tr>
+      <tr><td><strong>Round 2 Scores</strong></td><td>Team scramble scores + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(2)">Export</button></td></tr>
+      <tr><td><strong>Round 3 Scores</strong></td><td>Match play Nassau results + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(3)">Export</button></td></tr>
+      <tr><td><strong>Round 4 Scores</strong></td><td>Shamble net scores + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(4)">Export</button></td></tr>
+      <tr><td><strong>Round 5 Scores</strong></td><td>Hole-by-hole + net scores + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(5)">Export</button></td></tr>
+      <tr><td><strong>Round 6 Scores</strong></td><td>Match play Nassau results + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(6)">Export</button></td></tr>
+      <tr><td><strong>All Hole Scores</strong></td><td>Every hole score for every golfer across all rounds</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet('holes')">Export</button></td></tr>
+    </tbody></table>
+  </div></div>
+  <div id="sheets-status" style="display:none;" class="card"><div class="card-body" style="font-size:13px;color:var(--green);font-weight:600;"></div></div>
+</div>
+
+</div><!-- /page-wrap -->
+</div><!-- /app -->
+<div class="toast" id="toast"></div>
+
+<script>
+const SB_URL='https://bpcyfmnbdzbgkvgkoyim.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwY3lmbW5iZHpiZ2t2Z2tveWltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODQ0MTYsImV4cCI6MjA5NDI2MDQxNn0.7KZGJNBXC0FV-UOpCFvU5L5FlcxXPUdrnPkoPjJxswI';
+const sb=supabase.createClient(SB_URL,SB_KEY);
+
+// ===================== COURSE DATA =====================
+// Wild Horse Golf Club — Gothenburg, NE (Par 72)
+// Source: Official Wild Horse scorecard PDF
+const WILD_HORSE = {
+  name: 'Wild Horse Golf Club',
+  location: 'Gothenburg, NE',
+  par: [4,4,5,3,4,5,4,4,3, 4,3,4,3,5,4,4,5,4],
+  hdcp: [10,4,14,12,8,6,18,2,16, 5,17,9,11,15,7,1,13,3],
+  tees: {
+    'Black': {yards:[537,171,367,548,405,364,451,414,328, 408,126,442,208,559,445,548,418,524], rating:73.7, slope:135, color:'#1a1a1a'},
+    'Gold':  {yards:[478,431,356,484,343,297,439,363,132, 382,113,393,191,490,418,370,505,362], rating:71.1, slope:126, color:'#c9a227'},
+    'Silver':{yards:[329,282,277,356,484,160,339,328,143, 290,79,327,126,454,307,380,474,337], rating:66.1, slope:110, color:'#888'},
+    'Green': {yards:[305,375,114,238,433,209,308,71,2303 ], rating:67.5, slope:109, color:'#2d6e47'}, // women
+  },
+  defaultTee: 'Gold',
+};
+
+// Bayside Golf Club — Brule, NE (Par 71/72 — front par 35 or 36 depending on hole 6 tee)
+// Source: Official Bayside scorecard PDF
+const BAYSIDE = {
+  name: 'Bayside Golf Club',
+  location: 'Brule, NE',
+  par: [5,3,4,5,3,4,4,3,4, 4,5,4,3,4,5,4,3,4],
+  hdcp: [14,12,10,18,8,2,16,6,4, 7,1,11,3,15,5,13,17,9],
+  tees: {
+    'Black': {yards:[540,158,403,468,150,461,307,178,410, 357,652,400,205,380,616,308,138,415], rating:71.7, slope:135, color:'#1a1a1a'},
+    'Blue':  {yards:[481,130,387,448,134,458,286,160,372, 340,600,384,184,594,293,120,395,358], rating:70.4, slope:131, color:'#1a3a5c'},
+    'White': {yards:[467,120,373,425,133,415,276,146,363, 320,555,356,165,560,277,115,379,317], rating:69.0, slope:128, color:'#ccc'},
+    'Gold':  {yards:[402,109,358,398,126,372,238,140,313, 245,512,338,142,266,519,250,115,300], rating:65.9, slope:120, color:'#c9a227'},
+    'Red':   {yards:[355,77,233,307,104,341,215,124,285,  209,428,246,116,224,425,214,109,270], rating:68.6, slope:119, color:'#8b2020'},
+  },
+  defaultTee: 'Blue',
+};
+
+// Which course each round is played on
+const ROUND_COURSE = {1:WILD_HORSE,2:WILD_HORSE,3:BAYSIDE,4:BAYSIDE,5:WILD_HORSE,6:WILD_HORSE};
+
+// For scoring calculations (par per hole), use the course's par array
+function getRoundPar(r){ return ROUND_COURSE[r].par; }
+// Convenience — flat PAR still used by stableford calc (Wild Horse default)
+const PAR = WILD_HORSE.par;
+
+const RNAMES=['','Modified Stableford','4-Person Scramble','2v2 Best Ball Match Play','4-Person Shamble','Individual Net Score','2v2 Scramble Match Play'];
+const RVENUES=['','Wild Horse','Wild Horse','Bayside','Bayside','Wild Horse','Wild Horse'];
+
+let ME=null,golfers=[],holeScores={},roundResults={},pairingsData={},shootoutSt={};
+let curMyR=1,curSCR=1,curPairR=1;
+let saveTimers={};
+let IS_ADMIN=false;
+
+// ADMIN credentials
+const ADMIN_PASSWORD='DBI2026admin';
+
+// Get which group a golfer belongs to for a given round
+function getMyGroup(r){
+  const grps=pairingsData[r]||[];
+  if(!ME) return null;
+  // Find golfer's 0-based index in golfers array
+  const myIdx=golfers.findIndex(g=>g.id===ME.id);
+  for(let gi=0;gi<grps.length;gi++){
+    const pi=grps[gi].player_indices||[];
+    if(pi.includes(myIdx)) return {groupNum:gi, playerIndices:pi};
+  }
+  return null;
+}
+
+// Check if current user can edit a golfer's score for a given round
+function canEditScore(golferIdx, r){
+  if(IS_ADMIN) return true;
+  const myIdx=golfers.findIndex(g=>g.id===ME.id);
+  if(myIdx===golferIdx) return true; // always edit self
+  const grp=getMyGroup(r);
+  if(!grp) return false;
+  return grp.playerIndices.includes(golferIdx);
+}
+
+// ===================== INIT =====================
+async function init(){
+  const savedId=localStorage.getItem('dbi26_uid');
+  const {data:gd}=await sb.from('golfers').select('*').order('id');
+  golfers=gd||[];
+  const sel=document.getElementById('login-select');
+  golfers.forEach(g=>{const o=document.createElement('option');o.value=g.id;o.textContent=`${g.name} (HDCP ${g.hdcp})`;sel.appendChild(o);});
+  if(savedId){const g=golfers.find(x=>x.id==savedId);if(g){ME=g;await enterApp();return;}}
+  document.getElementById('loading-screen').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+}
+
+async function doLogin(){
+  const id=parseInt(document.getElementById('login-select').value);
+  if(!id){showToast('Pick your name!');return;}
+  ME=golfers.find(g=>g.id===id);
+  localStorage.setItem('dbi26_uid',id);
+  await enterApp();
+}
+
+function logout(){localStorage.removeItem('dbi26_uid');location.reload();}
+
+async function enterApp(){
+  document.getElementById('loading-screen').style.display='none';
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('user-label').textContent=ME.name;
+  IS_ADMIN=ME.is_admin||false;
+  // Show admin-only nav items
+  document.querySelectorAll('.admin-only').forEach(el=>el.style.display=IS_ADMIN?'':'none');
+  await loadAll();
+  setupRealtime();
+  renderLB();renderMyScores(1);renderSC(1);renderPairings(1);renderShootout();renderGolfers();renderScoringAdmin();
+}
+
+async function loadAll(){
+  const [hs,rr,pr,so]=await Promise.all([
+    sb.from('hole_scores').select('*'),
+    sb.from('round_results').select('*'),
+    sb.from('pairings').select('*').order('group_num'),
+    sb.from('shootout').select('*'),
+  ]);
+  holeScores={};
+  (hs.data||[]).forEach(s=>{
+    if(!holeScores[s.round])holeScores[s.round]={};
+    if(!holeScores[s.round][s.golfer_id])holeScores[s.round][s.golfer_id]={};
+    holeScores[s.round][s.golfer_id][s.hole]=s.gross_score;
+  });
+  roundResults={};
+  (rr.data||[]).forEach(r=>{if(!roundResults[r.round])roundResults[r.round]={};roundResults[r.round][r.golfer_id]=r;});
+  pairingsData={};
+  (pr.data||[]).forEach(p=>{if(!pairingsData[p.round])pairingsData[p.round]=[];pairingsData[p.round].push(p);});
+  shootoutSt={};
+  (so.data||[]).forEach(s=>{shootoutSt[s.golfer_id]=s;});
+}
+
+function setupRealtime(){
+  sb.channel('dbi-rt')
+    .on('postgres_changes',{event:'*',schema:'public',table:'hole_scores'},async()=>{
+      const {data}=await sb.from('hole_scores').select('*');
+      holeScores={};
+      (data||[]).forEach(s=>{if(!holeScores[s.round])holeScores[s.round]={};if(!holeScores[s.round][s.golfer_id])holeScores[s.round][s.golfer_id]={};holeScores[s.round][s.golfer_id][s.hole]=s.gross_score;});
+      renderLB();
+      if(document.getElementById('tab-scorecard').classList.contains('active'))renderSC(curSCR);
+      if(document.getElementById('tab-admin').classList.contains('active'))renderScoringAdmin();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'round_results'},async()=>{
+      const {data}=await sb.from('round_results').select('*');
+      roundResults={};
+      (data||[]).forEach(r=>{if(!roundResults[r.round])roundResults[r.round]={};roundResults[r.round][r.golfer_id]=r;});
+      renderLB();renderShootout();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'golfers'},async()=>{
+      const {data}=await sb.from('golfers').select('*').order('id');
+      golfers=data||[];ME=golfers.find(g=>g.id===ME.id)||ME;
+      renderGolfers();renderLB();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'shootout'},async()=>{
+      const {data}=await sb.from('shootout').select('*');
+      shootoutSt={};(data||[]).forEach(s=>{shootoutSt[s.golfer_id]=s;});renderShootout();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'pairings'},async()=>{
+      const {data}=await sb.from('pairings').select('*').order('group_num');
+      pairingsData={};(data||[]).forEach(p=>{if(!pairingsData[p.round])pairingsData[p.round]=[];pairingsData[p.round].push(p);});
+      if(document.getElementById('tab-pairings').classList.contains('active'))renderPairings(curPairR);
+    })
+    .subscribe();
+}
+
+// ===================== LEADERBOARD =====================
+function getTotalPts(gid){let t=0;for(let r=1;r<=6;r++){const rr=roundResults[r]?.[gid];if(rr)t+=parseFloat(rr.dbi_points||0);}return t;}
+function getRndPts(gid,r){const rr=roundResults[r]?.[gid];return rr!=null?parseFloat(rr.dbi_points||0):null;}
+
+function renderLB(){
+  const ranked=golfers.map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total);
+  const scored=Object.keys(roundResults).filter(r=>Object.keys(roundResults[r]).length>0).length;
+  document.getElementById('lb-badge').textContent=`${scored} of 6 rounds scored`;
+  const el=document.getElementById('lb-list');
+  if(ranked.every(r=>r.total===0)){el.innerHTML=`<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px;">No DBI points yet — get on the course!</div>`;return;}
+  el.innerHTML=ranked.map((g,i)=>{
+    const tc=i===0?'top1':i===1?'top2':i===2?'top3':'';
+    const inShootout=i<10;
+    const entHole=i<4?1:i<6?2:i<8?3:i===8?4:5;
+    const chips=[1,2,3,4,5,6].map(r=>{const p=getRndPts(g.id,r);return p!==null?`<span class="rnd-chip scored">R${r}:${p}</span>`:`<span class="rnd-chip">R${r}</span>`;}).join('');
+    const isMe=g.id===ME?.id;
+    return `<div class="lb-row" style="${isMe?'background:#f0f8f3;':''}">
+      <div class="lb-rank-num ${tc}">${i+1}</div>
+      <div class="lb-avatar">${ini(g.name)}</div>
+      <div style="flex:1;">
+        <div class="lb-name">${g.name}${isMe?' <span style="font-size:10px;color:var(--green-light);">(you)</span>':''}</div>
+        <div class="lb-sub">HDCP ${g.hdcp}${inShootout?` · <span class="lb-shootout">🎯 Shootout (hole ${entHole})</span>`:''}</div>
+        <div class="rnd-chips">${chips}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="lb-total ${tc}">${g.total}</div>
+        <div class="lb-pts-label">DBI Pts</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ===================== MY SCORES =====================
+function showMyRound(r,btn){
+  curMyR=r;
+  document.querySelectorAll('#my-rtabs .round-tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderMyScores(r);
+}
+
+function renderMyScores(r){
+  const gid=ME.id,hdcp=parseFloat(ME.hdcp);
+  const sc=holeScores[r]?.[gid]||{};
+  const course=ROUND_COURSE[r];
+  const par=course.par;
+  html=`<div class="format-box"><strong>Round ${r} @ ${course.name} — ${RNAMES[r]}</strong><br>
+    <span style="font-size:12px;">Your handicap: ${hdcp} · Stableford Quota (R1/R5): ${38-hdcp}</span></div>`;
+  html+=`<div class="score-panel"><div class="score-panel-hdr"><h3>${ME.name} — Round ${r}</h3><span class="my-tag">✏️ Your Card</span></div><div class="hole-grid">`;
+  for(let h=1;h<=18;h++){
+    const v=sc[h]||'';
+    const cl=v?holeColor(v,par[h-1]):'';
+    html+=`<div class="hole-cell"><div class="hole-lbl">H${h}<span style="display:block;font-size:8px;color:var(--text-muted);">P${par[h-1]}</span></div>
+      <input type="number" min="1" max="15" class="hi ${cl}" id="mh_${r}_${h}" value="${v}" placeholder="${par[h-1]}"
+        oninput="onHoleInput(this,${r},${h},${h-1},${r})"></div>`;
+    if(h===9)html+=`<div class="hole-divider"></div>`;
+  }
+  html+=`</div>`;
+  const f=Object.entries(sc).filter(([h])=>+h<=9).reduce((a,[,s])=>a+s,0);
+  const b=Object.entries(sc).filter(([h])=>+h>9).reduce((a,[,s])=>a+s,0);
+  const tot=f+b; const net=tot?tot-hdcp:0;
+  const fPar=par.slice(0,9).reduce((a,b)=>a+b,0);
+  const bPar=par.slice(9).reduce((a,b)=>a+b,0);
+  const toPar=tot?(tot-(fPar+bPar)):null;
+  html+=`<div class="totals-bar">
+    <div class="tot-item"><div class="tot-lbl">Front</div><div class="tot-val" id="tot-f-${r}">${f||'—'}</div></div>
+    <div class="tot-item"><div class="tot-lbl">Back</div><div class="tot-val" id="tot-b-${r}">${b||'—'}</div></div>
+    <div class="tot-item"><div class="tot-lbl">Gross</div><div class="tot-val" id="tot-g-${r}">${tot||'—'}</div></div>
+    <div class="tot-item"><div class="tot-lbl">+/- Par</div><div class="tot-val" id="tot-p-${r}" style="color:${toPar===0?'var(--green)':toPar>0?'var(--red)':'#0a5c36'}">${toPar!==null?(toPar>0?'+':'')+toPar:'—'}</div></div>
+    <div class="tot-item"><div class="tot-lbl">Net</div><div class="tot-val" id="tot-n-${r}">${tot?Math.round(net):'—'}</div></div>
+  </div></div>`;
+  const rr=roundResults[r]?.[gid];
+  if(rr)html+=`<div class="card"><div class="card-body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+    <span style="font-size:14px;font-weight:600;">Round ${r} DBI Points:</span>
+    <span class="pts-chip" style="font-size:18px;padding:4px 14px;">${rr.dbi_points}</span>
+    ${rr.place?`<span style="font-size:13px;color:var(--text-muted);">Finished ${rr.place}${ord(rr.place)}</span>`:''}
+  </div></div>`;
+  document.getElementById('my-scores-content').innerHTML=html;
+  let html2=''; // reset
+}
+
+function onHoleInput(inp,r,h,pi){
+  onHoleInputForGolfer(inp,r,h,pi,ME.id);
+}
+
+function onHoleInputForGolfer(inp,r,h,pi,golferId){
+  const coursePar=ROUND_COURSE[r]?ROUND_COURSE[r].par:PAR;
+  const v=parseInt(inp.value);
+  inp.className=(inp.classList.contains('sc-hi')?'sc-hi':'hi')+(v?' '+holeColor(v,coursePar[pi]):'');
+  clearTimeout(saveTimers[`${r}_${h}_${golferId}`]);
+  saveTimers[`${r}_${h}_${golferId}`]=setTimeout(()=>persistHole(r,h,v,golferId),700);
+  if(!holeScores[r])holeScores[r]={};
+  if(!holeScores[r][golferId])holeScores[r][golferId]={};
+  if(v>=1)holeScores[r][golferId][h]=v; else delete holeScores[r][golferId][h];
+  if(golferId===ME.id) updateTotals(r);
+}
+
+async function persistHole(r,h,v,golferId){
+  const gid=golferId||ME.id;
+  if(!v||v<1)return;
+  await sb.from('hole_scores').upsert({round:r,golfer_id:gid,hole:h,gross_score:v},{onConflict:'round,golfer_id,hole'});
+}
+
+function updateTotals(r){
+  const sc=holeScores[r]?.[ME.id]||{};
+  const f=Object.entries(sc).filter(([h])=>+h<=9).reduce((a,[,s])=>a+s,0);
+  const b=Object.entries(sc).filter(([h])=>+h>9).reduce((a,[,s])=>a+s,0);
+  const tot=f+b;const net=tot?tot-parseFloat(ME.hdcp):0;
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  set(`tot-f-${r}`,f||'—');set(`tot-b-${r}`,b||'—');set(`tot-g-${r}`,tot||'—');set(`tot-n-${r}`,tot?Math.round(net):'—');
+}
+
+// ===================== SCORECARDS =====================
+function showSCRound(r,btn){
+  curSCR=r;
+  document.querySelectorAll('#sc-rtabs .round-tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderSC(r);
+}
+
+function renderSC(r){
+  const div=document.getElementById('scorecard-content');
+  const course=ROUND_COURSE[r];
+  const par=course.par;
+  const hdcpIndex=course.hdcp;
+  const h18=Array.from({length:18},(_,i)=>i+1);
+  const fPar=par.slice(0,9).reduce((a,b)=>a+b,0);
+  const bPar=par.slice(9).reduce((a,b)=>a+b,0);
+
+  // Tee selector
+  const teeNames=Object.keys(course.tees);
+  const storedTee=localStorage.getItem(`dbi26_tee_r${r}`)||course.defaultTee;
+  const selTee=teeNames.includes(storedTee)?storedTee:course.defaultTee;
+  const teeData=course.tees[selTee];
+
+  const fYds=teeData.yards.slice(0,9).reduce((a,b)=>a+b,0);
+  const bYds=teeData.yards.slice(9).reduce((a,b)=>a+b,0);
+  const totYds=fYds+bYds;
+
+  const teeBtns=teeNames.map(t=>{
+    const td=course.tees[t];
+    const active=t===selTee;
+    return `<button onclick="switchTee(${r},'${t}')" style="padding:5px 12px;border-radius:5px;border:2px solid ${active?td.color:'var(--border)'};background:${active?td.color:'var(--white)'};color:${active?'#fff':'var(--text)'};font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;">${t}</button>`;
+  }).join('');
+
+  let html=`
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+    ${teeBtns}
+    <span style="font-size:12px;color:var(--text-muted);margin-left:4px;">Rating: <strong>${teeData.rating}</strong> · Slope: <strong>${teeData.slope}</strong> · ${totYds} yds</span>
+  </div>
+  <div class="card"><div class="card-header">
+    <span>Round ${r} — ${RNAMES[r]} @ ${course.name}</span>
+    <span class="badge">${course.location}</span>
+  </div>
+  <div class="scorecard-wrap"><table class="sc"><thead>
+    <tr>
+      <th class="nc">Golfer</th><th>HCP</th>
+      ${par.slice(0,9).map((_,i)=>`<th>${i+1}</th>`).join('')}
+      <th>OUT</th>
+      ${par.slice(9).map((_,i)=>`<th>${i+10}</th>`).join('')}
+      <th>IN</th><th>TOT</th><th>NET</th>
+    </tr>
+    <tr class="par-row">
+      <td class="nc" style="font-weight:700;color:var(--green);">Par</td><td></td>
+      ${par.slice(0,9).map(p=>`<td>${p}</td>`).join('')}
+      <td class="tot-cell">${fPar}</td>
+      ${par.slice(9).map(p=>`<td>${p}</td>`).join('')}
+      <td class="tot-cell">${bPar}</td><td class="tot-cell">${fPar+bPar}</td><td></td>
+    </tr>
+    <tr class="par-row">
+      <td class="nc" style="color:${course.tees[selTee].color};font-weight:700;">${selTee} Tees</td><td></td>
+      ${teeData.yards.slice(0,9).map(y=>`<td style="font-size:10px;">${y}</td>`).join('')}
+      <td class="tot-cell" style="font-size:10px;">${fYds}</td>
+      ${teeData.yards.slice(9).map(y=>`<td style="font-size:10px;">${y}</td>`).join('')}
+      <td class="tot-cell" style="font-size:10px;">${bYds}</td>
+      <td class="tot-cell" style="font-size:10px;">${totYds}</td><td></td>
+    </tr>
+    <tr class="par-row">
+      <td class="nc" style="color:var(--text-muted);">HCP Index</td><td></td>
+      ${hdcpIndex.slice(0,9).map(h=>`<td style="font-size:10px;color:var(--text-muted);">${h}</td>`).join('')}
+      <td class="tot-cell"></td>
+      ${hdcpIndex.slice(9).map(h=>`<td style="font-size:10px;color:var(--text-muted);">${h}</td>`).join('')}
+      <td class="tot-cell"></td><td class="tot-cell"></td><td></td>
+    </tr>
+  </thead><tbody>`;
+
+  golfers.forEach((g,gi)=>{
+    const sc=holeScores[r]?.[g.id]||{};
+    const isMe=g.id===ME?.id;
+    const canEdit=canEditScore(gi,r);
+    const f=h18.slice(0,9).reduce((a,h)=>a+(sc[h]||0),0);
+    const bk=h18.slice(9).reduce((a,h)=>a+(sc[h]||0),0);
+    const tot=f+bk;
+    const net=tot?tot-parseFloat(g.hdcp):'';
+    const rowStyle=isMe?'me-row':canEdit?'can-edit-row':'';
+    html+=`<tr class="${rowStyle}" title="${canEdit&&!isMe?'Your group — you can enter scores':''}">
+      <td class="nc">${g.name}${isMe?' ★':''}${canEdit&&!isMe?' <span style="font-size:9px;color:var(--green-light);">✎</span>':''}</td>
+      <td>${g.hdcp}</td>`;
+    h18.slice(0,9).forEach(h=>{
+      const v=sc[h]||'';const cl=v?holeColor(v,par[h-1]):'';
+      if(canEdit)html+=`<td><input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="onHoleInputForGolfer(this,${r},${h},${h-1},${g.id})"></td>`;
+      else html+=`<td><input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></td>`;
+    });
+    html+=`<td class="tot-cell">${f||'—'}</td>`;
+    h18.slice(9).forEach(h=>{
+      const v=sc[h]||'';const cl=v?holeColor(v,par[h-1]):'';
+      if(canEdit)html+=`<td><input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="onHoleInputForGolfer(this,${r},${h},${h-1},${g.id})"></td>`;
+      else html+=`<td><input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></td>`;
+    });
+    html+=`<td class="tot-cell">${tot||'—'}</td><td class="tot-cell">${net?Math.round(net):'—'}</td></tr>`;
+  });
+
+  html+=`</tbody></table></div>
+  <div style="padding:10px 14px;background:var(--cream);border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
+    ${course.name} · ${course.location} · Par ${fPar+bPar} · ${selTee} Tees: ${totYds} yds · Rating ${teeData.rating} / Slope ${teeData.slope}
+  </div></div>`;
+
+  div.innerHTML=html;
+}
+
+function switchTee(r, tee){
+  localStorage.setItem(`dbi26_tee_r${r}`, tee);
+  renderSC(r);
+}
+
+// ===================== PAIRINGS =====================
+function showPairRound(r,btn){
+  curPairR=r;
+  document.querySelectorAll('#pair-rtabs .round-tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  renderPairings(r);
+}
+
+function renderPairings(r){
+  const grps=pairingsData[r]||[];
+  const matchR=[3,6];const isMatch=matchR.includes(r);
+  let html='';
+  for(let gi=0;gi<5;gi++){
+    const g=grps[gi]||{tee_time:'',player_indices:[gi*4,gi*4+1,gi*4+2,gi*4+3]};
+    const pi=g.player_indices||[gi*4,gi*4+1,gi*4+2,gi*4+3];
+    const label=isMatch?`Match ${gi+1}`:`Group ${gi+1}`;
+    html+=`<div class="group-card"><div class="group-hdr">
+      <span>${label}</span>
+      <input type="text" placeholder="Tee Time" value="${g.tee_time||''}"
+        id="tt_${r}_${gi}" style="border:none;background:rgba(255,255,255,0.15);color:#fff;border-radius:4px;padding:3px 8px;font-size:12px;font-family:'Barlow',sans-serif;width:130px;">
+    </div><div class="group-players">`;
+    for(let p=0;p<4;p++){
+      const sidx=pi[p]??0;
+      const role=isMatch?(p<2?' — Team A':' — Team B'):'';
+      html+=`<div style="display:flex;flex-direction:column;gap:3px;min-width:150px;">
+        <span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Player ${p+1}${role}</span>
+        <select class="sel" id="ps_${r}_${gi}_${p}">
+          ${golfers.map((gf,gfi)=>`<option value="${gfi}" ${gfi===sidx?'selected':''}>${gf.name} (${gf.hdcp})</option>`).join('')}
+        </select>
+      </div>`;
+    }
+    html+=`</div></div>`;
+  }
+  document.getElementById('pairings-content').innerHTML=html;
+}
+
+async function savePairings(){
+  const r=curPairR;
+  for(let gi=0;gi<5;gi++){
+    const tt=document.getElementById(`tt_${r}_${gi}`)?.value||'';
+    const pi=[0,1,2,3].map(p=>parseInt(document.getElementById(`ps_${r}_${gi}_${p}`)?.value)||0);
+    await sb.from('pairings').upsert({round:r,group_num:gi+1,tee_time:tt,player_indices:pi},{onConflict:'round,group_num'});
+    if(!pairingsData[r])pairingsData[r]=[];
+    pairingsData[r][gi]={round:r,group_num:gi+1,tee_time:tt,player_indices:pi};
+  }
+  showToast('Pairings saved for everyone! ✓');
+}
+
+// ===================== SHOOTOUT =====================
+function renderShootout(){
+  const ranked=golfers.map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total);
+  const top10=ranked.slice(0,10);
+  const entHole=s=>s<4?1:s<6?2:s<8?3:s===8?4:5;
+  const mulls=hdcp=>hdcp>=24?2:hdcp>=20?1:0;
+  let html=top10.map((g,seed)=>{
+    const so=shootoutSt[g.id];const status=so?.status||'active';
+    const lbl=status==='champion'?'🏆 CHAMPION':status==='eliminated'?'❌ Eliminated':'🟢 Active';
+    const cls=status==='champion'?'so-champion':status==='eliminated'?'so-eliminated':'so-active';
+    return `<div class="so-row">
+      <div style="width:24px;font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--text-muted);text-align:center;">${seed+1}</div>
+      <div class="lb-avatar">${ini(g.name)}</div>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;">${g.name}</div>
+        <div style="font-size:11px;color:var(--text-muted);">HDCP ${g.hdcp} · ${mulls(g.hdcp)} mulligan${mulls(g.hdcp)!==1?'s':''} · Enters Hole ${entHole(seed)}</div>
+      </div>
+      <span class="pts-chip">${g.total}</span>
+      <span class="so-stat ${cls}" onclick="cycleSOStatus(${g.id},'${status}')">${lbl}</span>
+    </div>`;
+  }).join('');
+  if(!html)html=`<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">Complete scoring to determine the shootout field.</div>`;
+  document.getElementById('shootout-list').innerHTML=html;
+}
+
+async function cycleSOStatus(gid,cur){
+  const next=cur==='active'?'eliminated':cur==='eliminated'?'champion':'active';
+  await sb.from('shootout').upsert({golfer_id:gid,status:next},{onConflict:'golfer_id'});
+  shootoutSt[gid]={...(shootoutSt[gid]||{}),status:next};
+  renderShootout();
+}
+
+// ===================== GOLFERS =====================
+function renderGolfers(){
+  document.getElementById('golfers-grid').innerHTML=golfers.map((g,i)=>`
+    <div class="golfer-card">
+      <div class="g-avatar">${ini(g.name)}</div>
+      <div style="flex:1;min-width:0;">
+        <div><input type="text" value="${g.name}" onchange="golfers[${i}].name=this.value"
+          style="border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:13px;font-family:'Barlow',sans-serif;width:115px;color:var(--text);"></div>
+        <div style="margin-top:5px;font-size:12px;color:var(--text-muted);">HDCP:
+          <input type="number" min="0" max="36" value="${g.hdcp}" onchange="golfers[${i}].hdcp=+this.value"
+            style="border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:13px;width:44px;">
+        </div>
+      </div>
+    </div>`).join('');
+}
+async function saveGolfers(){
+  for(const g of golfers)await sb.from('golfers').update({name:g.name,hdcp:g.hdcp}).eq('id',g.id);
+  showToast('Golfer info updated for everyone! ✓');
+}
+
+// ===================== POINTS ENGINE =====================
+
+// Helper: get a golfer's gross total for a round from hole_scores
+function getGross(gid, r){
+  const sc=holeScores[r]?.[gid]||{};
+  const tot=Object.values(sc).reduce((a,b)=>a+b,0);
+  return Object.keys(sc).length===18?tot:null; // only count complete rounds
+}
+function getGrossAny(gid,r){ // partial OK for display
+  const sc=holeScores[r]?.[gid]||{};
+  return Object.values(sc).reduce((a,b)=>a+b,0)||null;
+}
+
+// Assign ranks with tie handling (shared rank, skip next)
+function assignRanks(arr, valueFn, ascending=true){
+  const sorted=[...arr].sort((a,b)=>ascending?valueFn(a)-valueFn(b):valueFn(b)-valueFn(a));
+  let rank=1;
+  sorted.forEach((item,i)=>{
+    if(i>0&&valueFn(item)===valueFn(sorted[i-1])){item.rank=sorted[i-1].rank;}
+    else{item.rank=rank;}
+    rank=item.rank+1;
+  });
+  return sorted;
+}
+
+// Save round results to Supabase and update local cache
+async function saveRoundResults(r, results){
+  // results: [{golfer_id, dbi_points, gross_score, net_score, stableford_pts, place, notes}]
+  for(const res of results){
+    await sb.from('round_results').upsert({
+      round:r, golfer_id:res.golfer_id,
+      dbi_points:res.dbi_points||0,
+      gross_score:res.gross_score||null,
+      net_score:res.net_score||null,
+      stableford_pts:res.stableford_pts||null,
+      place:res.place||null,
+      notes:res.notes||null
+    },{onConflict:'round,golfer_id'});
+    if(!roundResults[r])roundResults[r]={};
+    roundResults[r][res.golfer_id]=res;
+  }
+}
+
+// ---- ROUND 1: Modified Stableford ----
+// Quota = 38 - HDCP. Score holes: Eagle=8, Birdie=4, Par=2, Bogey=1, else=0
+// Best (stableford_pts - quota) wins. Points: 1st=14, 2nd=13, ... 20th=0 (min 0)
+function calcStablefordPts(scores, hdcp){
+  const par=WILD_HORSE.par; // R1 is always Wild Horse
+  let pts=0;
+  for(let h=1;h<=18;h++){
+    const g=scores[h];if(!g)continue;
+    const d=g-par[h-1];
+    if(d<=-2)pts+=8;
+    else if(d===-1)pts+=4;
+    else if(d===0)pts+=2;
+    else if(d===1)pts+=1;
+  }
+  return pts;
+}
+
+async function calcRound1(){
+  const entries=golfers.map(g=>{
+    const sc=holeScores[1]?.[g.id]||{};
+    const holesPlayed=Object.keys(sc).length;
+    const sfPts=calcStablefordPts(sc,g.hdcp);
+    const quota=38-parseFloat(g.hdcp);
+    const vsQuota=sfPts-quota;
+    return {golfer_id:g.id,name:g.name,hdcp:g.hdcp,sfPts,quota,vsQuota,holesPlayed};
+  });
+  const ranked=assignRanks(entries,e=>e.vsQuota,false);
+  const results=ranked.map(e=>({
+    golfer_id:e.golfer_id,
+    stableford_pts:e.sfPts,
+    dbi_points:Math.max(0,14-(e.rank-1)),
+    place:e.rank,
+    notes:`Quota:${e.quota} SF:${e.sfPts} vsQ:${e.vsQuota>=0?'+':''}${e.vsQuota}`
+  }));
+  await saveRoundResults(1,results);
+  renderLB();renderMyScores(curMyR);
+  return results;
+}
+
+// ---- ROUND 2: 4-Person Scramble ----
+// Teams from pairings. Low gross team score wins. 1st=7,2nd=5,3rd=4,4th=2,5th=0
+const R2PTS=[7,5,4,2,0];
+async function calcRound2(){
+  const grps=pairingsData[2]||[];
+  // Build team scores — use manually entered gross or sum of holes if available
+  // We'll read the manual team gross inputs from the scoring panel
+  const teams=grps.slice(0,5).map((g,gi)=>{
+    const pi=g.player_indices||[];
+    const manualEl=document.getElementById(`r2gross_${gi}`);
+    const gross=manualEl?parseFloat(manualEl.value)||null:null;
+    return {gi,gross,playerIds:pi.map(idx=>golfers[idx]?.id).filter(Boolean)};
+  }).filter(t=>t.gross!==null);
+  if(teams.length===0){showToast('Enter team scores in the scoring panel first.');return;}
+  const ranked=assignRanks(teams,t=>t.gross,true);
+  const results=[];
+  ranked.forEach(t=>{
+    const pts=R2PTS[t.rank-1]??0;
+    t.playerIds.forEach(gid=>{results.push({golfer_id:gid,dbi_points:pts,gross_score:t.gross,place:t.rank,notes:`Team gross:${t.gross}`});});
+  });
+  await saveRoundResults(2,results);
+  renderLB();renderMyScores(curMyR);
+  return results;
+}
+
+// ---- ROUND 3: 2v2 Best Ball Match Play Nassau ----
+// 5 matches from pairings. Team A = players 0,1; Team B = players 2,3
+// For each match: front/back/total winner selected manually
+// Winner of front=3pts, back=3pts, total=3pts, overall winning team=3pts each player
+async function calcRound3(){
+  const grps=pairingsData[3]||[];
+  const results=[];
+  grps.slice(0,5).forEach((g,mi)=>{
+    const pi=g.player_indices||[];
+    const teamA=[golfers[pi[0]]?.id,golfers[pi[1]]?.id].filter(Boolean);
+    const teamB=[golfers[pi[2]]?.id,golfers[pi[3]]?.id].filter(Boolean);
+    const front=document.getElementById(`r3f_${mi}`)?.value;
+    const back=document.getElementById(`r3b_${mi}`)?.value;
+    const total=document.getElementById(`r3t_${mi}`)?.value;
+    if(!front&&!back&&!total)return;
+    const ptsA={},ptsB={};
+    teamA.forEach(id=>{ptsA[id]=0;});teamB.forEach(id=>{ptsB[id]=0;});
+    [[front,3],[back,3],[total,3]].forEach(([w,pts])=>{
+      if(w==='A')teamA.forEach(id=>ptsA[id]+=pts);
+      else if(w==='B')teamB.forEach(id=>ptsB[id]+=pts);
+    });
+    const aTotal=teamA.reduce((s,id)=>s+ptsA[id],0);
+    const bTotal=teamB.reduce((s,id)=>s+ptsB[id],0);
+    if(aTotal>bTotal)teamA.forEach(id=>ptsA[id]+=3);
+    else if(bTotal>aTotal)teamB.forEach(id=>ptsB[id]+=3);
+    teamA.forEach(id=>results.push({golfer_id:id,dbi_points:ptsA[id],place:aTotal>=bTotal?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
+    teamB.forEach(id=>results.push({golfer_id:id,dbi_points:ptsB[id],place:bTotal>aTotal?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
+  });
+  if(results.length===0){showToast('Select Front/Back/Total winners in the scoring panel first.');return;}
+  await saveRoundResults(3,results);
+  renderLB();renderMyScores(curMyR);
+  return results;
+}
+
+// ---- ROUND 4: 4-Person Shamble (80% HDCP) ----
+// Team score = sum of 2 best individual net scores. 1st=10,2nd=7,3rd=5,4th=3,5th=0
+const R4PTS=[10,7,5,3,0];
+async function calcRound4(){
+  const grps=pairingsData[4]||[];
+  const teams=grps.slice(0,5).map((g,gi)=>{
+    const pi=g.player_indices||[];
+    const manualEl=document.getElementById(`r4net_${gi}`);
+    const net=manualEl?parseFloat(manualEl.value)||null:null;
+    return {gi,net,playerIds:pi.map(idx=>golfers[idx]?.id).filter(Boolean)};
+  }).filter(t=>t.net!==null);
+  if(teams.length===0){showToast('Enter team net scores in the scoring panel first.');return;}
+  const ranked=assignRanks(teams,t=>t.net,true);
+  const results=[];
+  ranked.forEach(t=>{
+    const pts=R4PTS[t.rank-1]??0;
+    t.playerIds.forEach(gid=>results.push({golfer_id:gid,dbi_points:pts,net_score:t.net,place:t.rank,notes:`Team net:${t.net}`}));
+  });
+  await saveRoundResults(4,results);
+  renderLB();renderMyScores(curMyR);
+  return results;
+}
+
+// ---- ROUND 5: Individual Net Score ----
+// Net = Gross - HDCP. Best net wins. 1st=16, 2nd=15, ... min 0
+async function calcRound5(){
+  const entries=golfers.map(g=>{
+    const gross=getGrossAny(g.id,5);
+    const net=gross!==null?gross-parseFloat(g.hdcp):null;
+    return {golfer_id:g.id,name:g.name,hdcp:g.hdcp,gross,net};
+  }).filter(e=>e.gross!==null);
+  if(entries.length===0){showToast('No Round 5 scores found. Enter hole scores first.');return;}
+  const ranked=assignRanks(entries,e=>e.net,true);
+  const results=ranked.map(e=>({
+    golfer_id:e.golfer_id,
+    gross_score:e.gross,
+    net_score:e.net,
+    dbi_points:Math.max(0,16-(e.rank-1)),
+    place:e.rank,
+    notes:`Gross:${e.gross} Net:${e.net}`
+  }));
+  await saveRoundResults(5,results);
+  renderLB();renderMyScores(curMyR);
+  return results;
+}
+
+// ---- ROUND 6: 2v2 Scramble Match Play Nassau ----
+// Same structure as Round 3 — manual front/back/total winner selection
+async function calcRound6(){
+  const grps=pairingsData[6]||[];
+  const results=[];
+  grps.slice(0,5).forEach((g,mi)=>{
+    const pi=g.player_indices||[];
+    const teamA=[golfers[pi[0]]?.id,golfers[pi[1]]?.id].filter(Boolean);
+    const teamB=[golfers[pi[2]]?.id,golfers[pi[3]]?.id].filter(Boolean);
+    const front=document.getElementById(`r6f_${mi}`)?.value;
+    const back=document.getElementById(`r6b_${mi}`)?.value;
+    const total=document.getElementById(`r6t_${mi}`)?.value;
+    if(!front&&!back&&!total)return;
+    const ptsA={},ptsB={};
+    teamA.forEach(id=>{ptsA[id]=0;});teamB.forEach(id=>{ptsB[id]=0;});
+    [[front,3],[back,3],[total,3]].forEach(([w,pts])=>{
+      if(w==='A')teamA.forEach(id=>ptsA[id]+=pts);
+      else if(w==='B')teamB.forEach(id=>ptsB[id]+=pts);
+    });
+    const aTotal=teamA.reduce((s,id)=>s+ptsA[id],0);
+    const bTotal=teamB.reduce((s,id)=>s+ptsB[id],0);
+    if(aTotal>bTotal)teamA.forEach(id=>ptsA[id]+=3);
+    else if(bTotal>aTotal)teamB.forEach(id=>ptsB[id]+=3);
+    teamA.forEach(id=>results.push({golfer_id:id,dbi_points:ptsA[id],place:aTotal>=bTotal?1:2,notes:`Match ${mi+1}`}));
+    teamB.forEach(id=>results.push({golfer_id:id,dbi_points:ptsB[id],place:bTotal>aTotal?1:2,notes:`Match ${mi+1}`}));
+  });
+  if(results.length===0){showToast('Select Front/Back/Total winners in the scoring panel first.');return;}
+  await saveRoundResults(6,results);
+  renderLB();renderMyScores(curMyR);
+  return results;
+}
+
+// ---- SCORING ADMIN PANEL ----
+function renderScoringAdmin(){
+  const div=document.getElementById('tab-admin');
+  const grpNames=r=>pairingsData[r]?.map((g,gi)=>{
+    const pi=g.player_indices||[];
+    return pi.map(idx=>golfers[idx]?.name?.split(' ')[0]||'?').join(' / ');
+  })||[];
+
+  let html=`
+  <div class="section-title">Score Admin</div>
+  <p class="section-sub">Finalize each round to generate DBI points. Round 1 &amp; 5 auto-calculate from hole scores. Team rounds need manual input below.</p>
+
+  <!-- R1 -->
+  <div class="card"><div class="card-header" style="justify-content:space-between;">
+    <span>Round 1 — Modified Stableford</span>
+    <button class="btn btn-gold btn-sm" onclick="runCalc(1)">⚡ Calculate &amp; Save Points</button>
+  </div><div class="card-body">
+    <p style="font-size:13px;color:var(--text-muted);">Auto-calculated from hole-by-hole scores. Make sure all 18 holes are entered for each golfer first.</p>
+    ${renderR1Preview()}
+  </div></div>
+
+  <!-- R2 -->
+  <div class="card"><div class="card-header" style="justify-content:space-between;">
+    <span>Round 2 — 4-Person Scramble</span>
+    <button class="btn btn-gold btn-sm" onclick="runCalc(2)">⚡ Calculate &amp; Save Points</button>
+  </div><div class="card-body">
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Enter each team's final gross score:</p>
+    <table class="data-table"><thead><tr><th>Group</th><th>Players</th><th>Team Gross Score</th></tr></thead><tbody>
+    ${(pairingsData[2]||Array(5).fill(null)).slice(0,5).map((g,gi)=>{
+      const names=g?(g.player_indices||[]).map(idx=>golfers[idx]?.name?.split(' ')[0]||'?').join(', '):`Group ${gi+1}`;
+      const existing=roundResults[2]?.[golfers[g?.player_indices?.[0]]?.id];
+      return `<tr><td><strong>Group ${gi+1}</strong></td><td style="font-size:12px;color:var(--text-muted);">${names}</td>
+        <td><input type="number" id="r2gross_${gi}" placeholder="e.g. 62" min="50" max="120"
+          value="${existing?.gross_score||''}"
+          style="border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:14px;font-weight:700;width:90px;"></td></tr>`;
+    }).join('')}
+    </tbody></table>
+  </div></div>
+
+  <!-- R3 -->
+  <div class="card"><div class="card-header" style="justify-content:space-between;">
+    <span>Round 3 — 2v2 Best Ball Nassau</span>
+    <button class="btn btn-gold btn-sm" onclick="runCalc(3)">⚡ Calculate &amp; Save Points</button>
+  </div><div class="card-body">
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Select the winner of each Nassau bet for each match (Team A = players 1&amp;2, Team B = players 3&amp;4):</p>
+    <table class="data-table"><thead><tr><th>Match</th><th>Team A</th><th>Team B</th><th>Front 9</th><th>Back 9</th><th>Total Match</th></tr></thead><tbody>
+    ${(pairingsData[3]||Array(5).fill(null)).slice(0,5).map((g,mi)=>{
+      const pi=g?.player_indices||[];
+      const nameA=[pi[0],pi[1]].map(i=>golfers[i]?.name?.split(' ')[0]||'?').join(' & ');
+      const nameB=[pi[2],pi[3]].map(i=>golfers[i]?.name?.split(' ')[0]||'?').join(' & ');
+      const ex=roundResults[3]?.[golfers[pi[0]]?.id];
+      const exNote=ex?.notes||'';
+      const exF=exNote.match(/Front:(\w+)/)?.[1]||'';
+      const exB=exNote.match(/Back:(\w+)/)?.[1]||'';
+      const exT=exNote.match(/Total:(\w+)/)?.[1]||'';
+      const sel=(id,val)=>`<select id="${id}" style="border:1px solid var(--border);border-radius:5px;padding:4px 6px;font-size:13px;font-family:'Barlow',sans-serif;">
+        <option value="">—</option>
+        <option value="A" ${val==='A'?'selected':''}>Team A</option>
+        <option value="B" ${val==='B'?'selected':''}>Team B</option>
+        <option value="T" ${val==='T'?'selected':''}>Tie</option></select>`;
+      return `<tr><td><strong>Match ${mi+1}</strong></td>
+        <td style="font-size:12px;">${nameA}</td><td style="font-size:12px;">${nameB}</td>
+        <td>${sel(`r3f_${mi}`,exF)}</td><td>${sel(`r3b_${mi}`,exB)}</td><td>${sel(`r3t_${mi}`,exT)}</td></tr>`;
+    }).join('')}
+    </tbody></table>
+  </div></div>
+
+  <!-- R4 -->
+  <div class="card"><div class="card-header" style="justify-content:space-between;">
+    <span>Round 4 — 4-Person Shamble (80% HDCP)</span>
+    <button class="btn btn-gold btn-sm" onclick="runCalc(4)">⚡ Calculate &amp; Save Points</button>
+  </div><div class="card-body">
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Enter each team's final net score (sum of 2 best individual net scores, using 80% of each player's handicap):</p>
+    <table class="data-table"><thead><tr><th>Group</th><th>Players (80% HDCP)</th><th>Team Net Score</th></tr></thead><tbody>
+    ${(pairingsData[4]||Array(5).fill(null)).slice(0,5).map((g,gi)=>{
+      const pi=g?.player_indices||[];
+      const names=pi.map(i=>golfers[i]?`${golfers[i].name.split(' ')[0]} (${Math.round(golfers[i].hdcp*0.8)})`:'-').join(', ');
+      const existing=roundResults[4]?.[golfers[pi[0]]?.id];
+      return `<tr><td><strong>Group ${gi+1}</strong></td><td style="font-size:11px;color:var(--text-muted);">${names}</td>
+        <td><input type="number" id="r4net_${gi}" placeholder="e.g. 58" min="40" max="110"
+          value="${existing?.net_score||''}"
+          style="border:1px solid var(--border);border-radius:5px;padding:5px 8px;font-size:14px;font-weight:700;width:90px;"></td></tr>`;
+    }).join('')}
+    </tbody></table>
+  </div></div>
+
+  <!-- R5 -->
+  <div class="card"><div class="card-header" style="justify-content:space-between;">
+    <span>Round 5 — Individual Net Score</span>
+    <button class="btn btn-gold btn-sm" onclick="runCalc(5)">⚡ Calculate &amp; Save Points</button>
+  </div><div class="card-body">
+    <p style="font-size:13px;color:var(--text-muted);">Auto-calculated from hole-by-hole scores (Gross – Handicap). Make sure all 18 holes are entered first.</p>
+    ${renderR5Preview()}
+  </div></div>
+
+  <!-- R6 -->
+  <div class="card"><div class="card-header" style="justify-content:space-between;">
+    <span>Round 6 — 2v2 Scramble Match Play Nassau</span>
+    <button class="btn btn-gold btn-sm" onclick="runCalc(6)">⚡ Calculate &amp; Save Points</button>
+  </div><div class="card-body">
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">A-player uses 70% HDCP, B-player uses 30% HDCP. Select the Nassau winner for each match (Team A = players 1&amp;2, Team B = players 3&amp;4):</p>
+    <table class="data-table"><thead><tr><th>Match</th><th>Team A (A+B)</th><th>Team B (A+B)</th><th>Front 9</th><th>Back 9</th><th>Total Match</th></tr></thead><tbody>
+    ${(pairingsData[6]||Array(5).fill(null)).slice(0,5).map((g,mi)=>{
+      const pi=g?.player_indices||[];
+      const fmt=(i,role)=>{const gf=golfers[i];return gf?`${gf.name.split(' ')[0]}(${role==='A'?Math.round(gf.hdcp*0.7):Math.round(gf.hdcp*0.3)})`:'-';};
+      const nameA=`${fmt(pi[0],'A')} & ${fmt(pi[1],'B')}`;
+      const nameB=`${fmt(pi[2],'A')} & ${fmt(pi[3],'B')}`;
+      const ex=roundResults[6]?.[golfers[pi[0]]?.id];
+      const exNote=ex?.notes||'';
+      const exF=exNote.match(/Front:(\w+)/)?.[1]||'';
+      const exB=exNote.match(/Back:(\w+)/)?.[1]||'';
+      const exT=exNote.match(/Total:(\w+)/)?.[1]||'';
+      const sel=(id,val)=>`<select id="${id}" style="border:1px solid var(--border);border-radius:5px;padding:4px 6px;font-size:13px;font-family:'Barlow',sans-serif;">
+        <option value="">—</option>
+        <option value="A" ${val==='A'?'selected':''}>Team A</option>
+        <option value="B" ${val==='B'?'selected':''}>Team B</option>
+        <option value="T" ${val==='T'?'selected':''}>Tie</option></select>`;
+      return `<tr><td><strong>Match ${mi+1}</strong></td>
+        <td style="font-size:11px;">${nameA}</td><td style="font-size:11px;">${nameB}</td>
+        <td>${sel(`r6f_${mi}`,exF)}</td><td>${sel(`r6b_${mi}`,exB)}</td><td>${sel(`r6t_${mi}`,exT)}</td></tr>`;
+    }).join('')}
+    </tbody></table>
+  </div></div>`;
+
+  div.innerHTML=html;
+}
+
+function renderR1Preview(){
+  const rows=golfers.map(g=>{
+    const sc=holeScores[1]?.[g.id]||{};
+    const holes=Object.keys(sc).length;
+    const sfPts=calcStablefordPts(sc,g.hdcp);
+    const quota=38-parseFloat(g.hdcp);
+    const vsQ=sfPts-quota;
+    const rr=roundResults[1]?.[g.id];
+    return `<tr><td>${g.name}</td><td>${g.hdcp}</td><td>${quota}</td>
+      <td>${holes}/18</td><td>${holes>0?sfPts:'—'}</td>
+      <td style="font-weight:700;color:${vsQ>=0?'var(--green)':'var(--red)'};">${holes>0?(vsQ>=0?'+':'')+vsQ:'—'}</td>
+      <td>${rr?`<span class="pts-chip">${rr.dbi_points}</span>`:'<span style="color:var(--text-muted);font-size:12px;">pending</span>'}</td></tr>`;
+  });
+  return `<table class="data-table" style="margin-top:10px;"><thead><tr>
+    <th>Golfer</th><th>HDCP</th><th>Quota</th><th>Holes</th><th>SF Pts</th><th>vs Quota</th><th>DBI Pts</th>
+  </tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
+
+function renderR5Preview(){
+  const par=WILD_HORSE.par;
+  const rows=golfers.map(g=>{
+    const gross=getGrossAny(g.id,5);
+    const net=gross!==null?gross-parseFloat(g.hdcp):null;
+    const rr=roundResults[5]?.[g.id];
+    const holes=Object.keys(holeScores[5]?.[g.id]||{}).length;
+    return `<tr><td>${g.name}</td><td>${g.hdcp}</td>
+      <td>${holes}/18</td>
+      <td style="font-weight:700;">${gross!==null?gross:'—'}</td>
+      <td style="font-weight:700;color:var(--green);">${net!==null?Math.round(net):'—'}</td>
+      <td>${rr?`<span class="pts-chip">${rr.dbi_points}</span>`:'<span style="color:var(--text-muted);font-size:12px;">pending</span>'}</td></tr>`;
+  });
+  return `<table class="data-table" style="margin-top:10px;"><thead><tr>
+    <th>Golfer</th><th>HDCP</th><th>Holes</th><th>Gross</th><th>Net</th><th>DBI Pts</th>
+  </tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
+
+async function runCalc(r){
+  showToast(`Calculating Round ${r}...`);
+  const calcs={1:calcRound1,2:calcRound2,3:calcRound3,4:calcRound4,5:calcRound5,6:calcRound6};
+  const res=await calcs[r]();
+  if(res){
+    showToast(`✓ Round ${r} points saved to leaderboard!`);
+    renderScoringAdmin(); // refresh preview tables
+  }
+}
+
+// ===================== GOOGLE SHEETS BACKUP =====================
+function saveSheetConfig(){
+  const url=document.getElementById('sheets-id')?.value?.trim();
+  if(url){localStorage.setItem('dbi26_sheets_url',url);showToast('Sheets URL saved!');}
+}
+
+const APPS_SCRIPT=`// DBI 2026 Google Sheets Apps Script
+// Deploy as Web App: Execute as Me, Anyone can access
+function doPost(e) {
+  const data = JSON.parse(e.postData.contents);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(data.sheet);
+  if (!sheet) sheet = ss.insertSheet(data.sheet);
+  sheet.clearContents();
+  if (data.rows && data.rows.length > 0) {
+    sheet.getRange(1, 1, data.rows.length, data.rows[0].length).setValues(data.rows);
+    sheet.getRange(1, 1, 1, data.rows[0].length).setFontWeight('bold')
+      .setBackground('#1a4a2e').setFontColor('#e8c04a');
+  }
+  return ContentService.createTextOutput(JSON.stringify({success:true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+
+function copyAppsScript(){
+  navigator.clipboard.writeText(APPS_SCRIPT).then(()=>showToast('Apps Script code copied!')).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=APPS_SCRIPT;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Apps Script code copied!');
+  });
+}
+
+async function sendToSheets(sheetName, rows){
+  const url=localStorage.getItem('dbi26_sheets_url');
+  if(!url){showToast('Set your Apps Script URL in the Sheets tab first!');return false;}
+  try{
+    const resp=await fetch(url,{method:'POST',body:JSON.stringify({sheet:sheetName,rows}),headers:{'Content-Type':'application/json'}});
+    return true;
+  }catch(e){showToast('Sheets export failed — check your Apps Script URL');return false;}
+}
+
+async function exportSheet(which){
+  let rows=[], name='';
+  if(which==='leaderboard'){
+    name='DBI Leaderboard';
+    const ranked=golfers.map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total);
+    rows=[['Rank','Golfer','HDCP','R1','R2','R3','R4','R5','R6','Total DBI Pts']];
+    ranked.forEach((g,i)=>{
+      rows.push([i+1,g.name,g.hdcp,...[1,2,3,4,5,6].map(r=>getRndPts(g.id,r)??''),g.total]);
+    });
+  } else if(which==='holes'){
+    name='All Hole Scores';
+    rows=[['Golfer','HDCP','Round',...Array.from({length:18},(_,i)=>`H${i+1}`),'Front','Back','Gross','Net']];
+    golfers.forEach(g=>{
+      for(let r=1;r<=6;r++){
+        const sc=holeScores[r]?.[g.id]||{};
+        const hRow=Array.from({length:18},(_,i)=>sc[i+1]||'');
+        const f=hRow.slice(0,9).reduce((a,b)=>a+(+b||0),0);
+        const bk=hRow.slice(9).reduce((a,b)=>a+(+b||0),0);
+        const tot=f+bk;
+        rows.push([g.name,g.hdcp,`Round ${r}`,...hRow,f||'',bk||'',tot||'',tot?tot-parseFloat(g.hdcp):'']);
+      }
+    });
+  } else {
+    const r=which;
+    name=`Round ${r} Scores`;
+    const course=ROUND_COURSE[r];
+    rows=[['Golfer','HDCP',...Array.from({length:18},(_,i)=>`H${i+1}`),'Front','Back','Gross','Net','Stableford','DBI Pts','Place']];
+    golfers.forEach(g=>{
+      const sc=holeScores[r]?.[g.id]||{};
+      const hRow=Array.from({length:18},(_,i)=>sc[i+1]||'');
+      const f=hRow.slice(0,9).reduce((a,b)=>a+(+b||0),0);
+      const bk=hRow.slice(9).reduce((a,b)=>a+(+b||0),0);
+      const tot=f+bk;
+      const sf=r===1?calcStablefordPts(sc,g.hdcp):'';
+      const rr=roundResults[r]?.[g.id];
+      rows.push([g.name,g.hdcp,...hRow,f||'',bk||'',tot||'',tot?Math.round(tot-parseFloat(g.hdcp)):'',sf,rr?.dbi_points??'',rr?.place??'']);
+    });
+  }
+  showToast(`Exporting ${name}...`);
+  const ok=await sendToSheets(name,rows);
+  if(ok){
+    showToast(`✓ ${name} exported to Sheets!`);
+    const el=document.getElementById('sheets-status');
+    if(el){el.style.display='block';el.querySelector('.card-body').textContent=`✓ Last export: ${name} at ${new Date().toLocaleTimeString()}`;}
+  }
+}
+
+async function exportAllToSheets(){
+  showToast('Exporting all data...');
+  await exportSheet('leaderboard');
+  await exportSheet('holes');
+  for(let r=1;r<=6;r++) await exportSheet(r);
+  showToast('✓ All data exported to Google Sheets!');
+}
+
+// ===================== UTILITIES =====================
+function holeColor(s,par){const d=s-par;return d<=-2?'eagle':d===-1?'birdie':d===0?'par':d===1?'bogey':'double';}
+function ini(n){return(n||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';}
+function ord(n){return n===1?'st':n===2?'nd':n===3?'rd':'th';}
+function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+function showTab(t,btn){
+  document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(e=>e.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+  if(btn)btn.classList.add('active');
+  if(t==='scorecard')renderSC(curSCR);
+  if(t==='leaderboard')renderLB();
+  if(t==='shootout')renderShootout();
+  if(t==='pairings')renderPairings(curPairR);
+  if(t==='myscores')renderMyScores(curMyR);
+  if(t==='golfers')renderGolfers();
+  if(t==='admin')renderScoringAdmin();
+  if(t==='sheets'){document.getElementById('sheets-id').value=localStorage.getItem('dbi26_sheets_url')||'';}
+}
+
+window.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
