@@ -525,15 +525,32 @@ function canEditScore(golferIdx, r){
 }
 
 // ===================== INIT =====================
+// Timeout helper
+function withTimeout(promise, ms){
+  return Promise.race([promise, new Promise((_,reject)=>setTimeout(()=>reject(new Error('Connection timed out after '+ms/1000+'s — check your internet connection')),ms))]);
+}
+
 async function init(){
-  const savedId=localStorage.getItem('dbi26_uid');
-  const {data:gd}=await sb.from('golfers').select('*').order('id');
-  golfers=gd||[];
-  const sel=document.getElementById('login-select');
-  golfers.forEach(g=>{const o=document.createElement('option');o.value=g.id;o.textContent=`${g.name} (HDCP ${g.hdcp})`;sel.appendChild(o);});
-  if(savedId){const g=golfers.find(x=>x.id==savedId);if(g){ME=g;await enterApp();return;}}
-  document.getElementById('loading-screen').style.display='none';
-  document.getElementById('login-screen').style.display='flex';
+  try{
+    const savedId=localStorage.getItem('dbi26_uid');
+    const {data:gd, error}=await withTimeout(sb.from('golfers').select('*').order('id'), 8000);
+    if(error) throw error;
+    golfers=gd||[];
+    const sel=document.getElementById('login-select');
+    golfers.forEach(g=>{const o=document.createElement('option');o.value=g.id;o.textContent=`${g.name} (HDCP ${g.hdcp})`;sel.appendChild(o);});
+    if(savedId){const g=golfers.find(x=>x.id==savedId);if(g){ME=g;await enterApp();return;}}
+    document.getElementById('loading-screen').style.display='none';
+    document.getElementById('login-screen').style.display='flex';
+  } catch(err){
+    console.error('Init error:',err);
+    document.getElementById('loading-screen').innerHTML=`
+      <div style="text-align:center;padding:40px;color:white;max-width:400px;">
+        <div style="font-family:'Playfair Display',serif;font-size:48px;color:#b8965a;margin-bottom:20px;">DBI</div>
+        <p style="color:rgba(255,255,255,0.7);margin-bottom:10px;">Connection error. Please check your internet and try again.</p>
+        <p style="color:rgba(255,255,255,0.4);font-size:12px;margin-bottom:20px;">${err.message||'Could not reach database'}</p>
+        <button onclick="location.reload()" style="background:#b8965a;color:#0a1628;border:none;padding:12px 28px;font-family:'Inter',sans-serif;font-weight:700;letter-spacing:2px;font-size:12px;text-transform:uppercase;cursor:pointer;border-radius:2px;">Retry</button>
+      </div>`;
+  }
 }
 
 async function doLogin(){
@@ -742,6 +759,8 @@ function getStrokes(playerHdcp, holeHdcpIndex, hdcpPct=1.0){
 }
 
 // Stroke dot HTML: • = 1 stroke, •• = 2 strokes
+function strokeTitle(n){return n+' stroke'+(n>1?'s':'');}
+
 function strokeDot(n){
   if(n<=0) return '';
   if(n===1) return `<span style="color:#c9a227;font-size:10px;line-height:1;display:block;text-align:center;">●</span>`;
@@ -874,13 +893,13 @@ function renderSC(r){
           ${dot}
           <input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15"
             oninput="onHoleInputForGolfer(this,${r},${h},${h-1},${g.id})"
-            style="${strokes>0?'border-color:#c9a227;':''}" title="${strokes>0?`${strokes} stroke${strokes>1?'s':''}`:''}">>
+            style="${strokes>0?'border-color:#c9a227;':''}" title="${strokes>0?strokeTitle(strokes):''}">>
         </td>`;
       } else {
         html+=`<td style="padding:2px 3px;">
           ${dot}
           <input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"
-            style="${strokes>0?'border-color:#c9a227;':''}" title="${strokes>0?`${strokes} stroke${strokes>1?'s':''}':''}">
+            style="${strokes>0?'border-color:#c9a227;':''}" title="${strokes>0?strokeTitle(strokes):''}">
         </td>`;
       }
     });
