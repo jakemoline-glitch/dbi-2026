@@ -298,8 +298,10 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
 <!-- GOLFERS -->
 <div id="tab-golfers" class="tab-content">
   <div class="section-title">The Field</div>
-  <p class="section-sub">20 golfers · Edit names &amp; handicaps · Save to update for everyone</p>
-  <div class="flex-gap"><button class="btn btn-primary" onclick="saveGolfers()">💾 Save Changes</button></div>
+  <p class="section-sub" id="golfers-desc">20 golfers · 2026 DBI</p>
+  <div class="flex-gap">
+    <button class="btn btn-primary" id="golfers-save-btn" onclick="saveGolfers()" style="display:none;">💾 Save Changes</button>
+  </div>
   <div id="golfers-grid" class="golfer-grid"></div>
 </div>
 
@@ -954,27 +956,49 @@ function showPairRound(r,btn){
 function renderPairings(r){
   const grps=pairingsData[r]||[];
   const matchR=[3,6];const isMatch=matchR.includes(r);
+  const isLocked=(r===3||r===6)&&!IS_ADMIN;
   let html='';
+  if(isLocked){
+    html+=`<div class="format-box" style="border-left-color:var(--gold);">
+      <strong>Rounds 3 &amp; 6 pairings</strong> are set by the admin after the in-person draft. Check back here once they have been entered!
+    </div>`;
+  }
   for(let gi=0;gi<5;gi++){
     const g=grps[gi]||{tee_time:'',player_indices:[gi*4,gi*4+1,gi*4+2,gi*4+3]};
     const pi=g.player_indices||[gi*4,gi*4+1,gi*4+2,gi*4+3];
     const label=isMatch?`Match ${gi+1}`:`Group ${gi+1}`;
     html+=`<div class="group-card"><div class="group-hdr">
       <span>${label}</span>
-      <input type="text" placeholder="Tee Time" value="${g.tee_time||''}"
-        id="tt_${r}_${gi}" style="border:none;background:rgba(255,255,255,0.15);color:#fff;border-radius:2px;padding:3px 8px;font-size:12px;font-family:'Inter',sans-serif;width:130px;">
+      ${!isLocked
+        ?`<input type="text" placeholder="Tee Time" value="${g.tee_time||''}"
+            id="tt_${r}_${gi}" style="border:none;background:rgba(255,255,255,0.12);color:#fff;border-radius:2px;padding:3px 8px;font-size:11px;font-family:'Inter',sans-serif;width:130px;">`
+        :`<span style="color:var(--gold-light);font-size:11px;">${g.tee_time||'TBD'}</span>`
+      }
     </div><div class="group-players">`;
     for(let p=0;p<4;p++){
       const sidx=pi[p]??0;
       const role=isMatch?(p<2?' — Team A':' — Team B'):'';
-      html+=`<div style="display:flex;flex-direction:column;gap:3px;min-width:150px;">
-        <span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Player ${p+1}${role}</span>
-        <select class="sel" id="ps_${r}_${gi}_${p}">
-          ${golfers.map((gf,gfi)=>`<option value="${gfi}" ${gfi===sidx?'selected':''}>${gf.name} (${gf.hdcp})</option>`).join('')}
-        </select>
-      </div>`;
+      if(!isLocked){
+        html+=`<div style="display:flex;flex-direction:column;gap:3px;min-width:150px;">
+          <span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Player ${p+1}${role}</span>
+          <select class="sel" id="ps_${r}_${gi}_${p}">
+            ${golfers.map((gf,gfi)=>`<option value="${gfi}" ${gfi===sidx?'selected':''}>${gf.name} (${gf.hdcp})</option>`).join('')}
+          </select>
+        </div>`;
+      } else {
+        const gf=golfers[sidx];
+        html+=`<div style="background:var(--parchment);border:1px solid var(--border);border-radius:2px;padding:6px 10px;font-size:13px;font-weight:600;color:var(--text);">
+          ${gf?gf.name:'TBD'} ${gf?`<span style="font-size:11px;color:var(--text-muted);font-weight:400;">(${gf.hdcp})</span>`:''}
+        </div>`;
+      }
     }
     html+=`</div></div>`;
+  }
+  if(!isLocked){
+    html+=`<div class="flex-gap" style="margin-top:4px;">
+      <button class="btn btn-gold btn-sm" onclick="savePairings()">Save Pairings</button>
+      <span style="font-size:11px;color:rgba(255,255,255,0.4);">Changes are saved for everyone.</span>
+    </div>`;
   }
   document.getElementById('pairings-content').innerHTML=html;
 }
@@ -1025,18 +1049,32 @@ async function cycleSOStatus(gid,cur){
 
 // ===================== GOLFERS =====================
 function renderGolfers(){
+  const isAdmin=IS_ADMIN;
   document.getElementById('golfers-grid').innerHTML=golfers.map((g,i)=>`
     <div class="golfer-card">
       <div class="g-avatar">${ini(g.name)}</div>
       <div style="flex:1;min-width:0;">
-        <div><input type="text" value="${g.name}" onchange="golfers[${i}].name=this.value"
-          style="border:1px solid var(--border);border-radius:2px;padding:3px 6px;font-size:13px;font-family:'Inter',sans-serif;width:115px;color:var(--text);"></div>
-        <div style="margin-top:5px;font-size:12px;color:var(--text-muted);">HDCP:
-          <input type="number" min="0" max="36" value="${g.hdcp}" onchange="golfers[${i}].hdcp=+this.value"
-            style="border:1px solid var(--border);border-radius:2px;padding:2px 4px;font-size:13px;width:44px;">
+        <div>
+          ${isAdmin
+            ? `<input type="text" value="${g.name}" onchange="golfers[${i}].name=this.value"
+                style="border:1px solid var(--border);border-radius:2px;padding:3px 6px;font-size:13px;font-family:'Inter',sans-serif;width:130px;color:var(--text);">`
+            : `<span style="font-size:13px;font-weight:600;color:var(--text);">${g.name}</span>`
+          }
+        </div>
+        <div style="margin-top:5px;font-size:12px;color:var(--text-muted);">
+          HDCP:
+          ${isAdmin
+            ? `<input type="number" min="0" max="54" value="${g.hdcp}" onchange="golfers[${i}].hdcp=+this.value"
+                style="border:1px solid var(--border);border-radius:2px;padding:2px 4px;font-size:13px;width:50px;">`
+            : `<strong>${g.hdcp}</strong>`
+          }
         </div>
       </div>
     </div>`).join('');
+
+  // Show/hide save button for admin only
+  const saveBtn=document.getElementById('golfers-save-btn');
+  if(saveBtn) saveBtn.style.display=isAdmin?'':'none';
 }
 async function saveGolfers(){
   for(const g of golfers)await sb.from('golfers').update({name:g.name,hdcp:g.hdcp}).eq('id',g.id);
@@ -1543,7 +1581,11 @@ function showTab(t,btn){
   if(t==='shootout')renderShootout();
   if(t==='pairings')renderPairings(curPairR);
   if(t==='myscores')renderMyScores(curMyR);
-  if(t==='golfers')renderGolfers();
+  if(t==='golfers'){
+    const desc=document.getElementById('golfers-desc');
+    if(desc) desc.textContent=IS_ADMIN?'20 golfers · Edit names & handicaps · Save to update for everyone':'20 golfers · 2026 DBI Handicaps';
+    renderGolfers();
+  }
   if(t==='admin')renderScoringAdmin();
   if(t==='sheets'){document.getElementById('sheets-id').value=localStorage.getItem('dbi26_sheets_url')||'';}
 }
