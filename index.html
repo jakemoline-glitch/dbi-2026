@@ -1090,6 +1090,7 @@ function renderSC(r){
 }
 
 function _renderSC(r,div){
+  const course=ROUND_COURSE[r];
   const par=course.par;
   const hdcpIndex=course.hdcp;
   const h18=Array.from({length:18},(_,i)=>i+1);
