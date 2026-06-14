@@ -974,6 +974,9 @@ function getMatchTeams(r, groupIdx){
   const grp=(pairingsData[r]||[])[groupIdx];
   if(!grp) return null;
   const pi=grp.player_indices||[];
+  if(pi.length<4) return null;
+  // Guard against out-of-range indices
+  if(pi.some(i=>i<0||i>=golfers.length||!golfers[i])) return null;
   if(r===3){
     // Best ball: Team A = slots 0,1 (full hdcp); Team B = slots 2,3 (full hdcp)
     return {
@@ -1071,7 +1074,22 @@ function matchStatusBadge(status){
 
 function renderSC(r){
   const div=document.getElementById('scorecard-content');
-  const course=ROUND_COURSE[r];
+  if(!div) return;
+  if(!golfers||!golfers.length){
+    div.innerHTML=`<div style="padding:24px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;">Loading...</div>`;
+    return;
+  }
+  try{
+    _renderSC(r,div);
+  } catch(err){
+    console.error('renderSC error:',err);
+    div.innerHTML=`<div style="padding:24px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;">
+      Could not render scorecard. Check console for details.<br><small>${err.message}</small>
+    </div>`;
+  }
+}
+
+function _renderSC(r,div){
   const par=course.par;
   const hdcpIndex=course.hdcp;
   const h18=Array.from({length:18},(_,i)=>i+1);
@@ -1145,6 +1163,23 @@ function renderSC(r){
       ${r===1?'<td></td><td></td>':''}
     </tr>
   </thead><tbody>`;
+
+  // Match play pre-computation (must be JS variables, not inside template string)
+  const isMatchRound=MATCH_ROUNDS.includes(r);
+  const matchGroupData={};
+  if(isMatchRound){
+    const grps=pairingsData[r]||[];
+    grps.forEach((grp,gi)=>{
+      try{
+        const teams=getMatchTeams(r,gi);
+        if(!teams){matchGroupData[gi]={teams:null,holeResults:Array(18).fill(null),runningStatus:Array(18).fill(null),nassau:{frontPlayed:0,backPlayed:0,frontLead:0,backLead:0,totalLead:0}};return;}
+        const holeResults=calcMatchHoles(r,gi);
+        const runningStatus=calcRunningStatus(holeResults);
+        const nassau=calcNassau(holeResults);
+        matchGroupData[gi]={teams,holeResults,runningStatus,nassau};
+      } catch(e){console.warn('Match group',gi,'error:',e);}
+    });
+  }
 
   golfers.forEach((g,gi)=>{
     const sc=holeScores[r]?.[g.id]||{};
