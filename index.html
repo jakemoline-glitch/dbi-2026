@@ -91,6 +91,10 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
 .hole-divider{grid-column:1/-1;height:1px;background:var(--border);margin:2px 0;}
 .hole-cell{display:flex;flex-direction:column;align-items:center;gap:3px;}
 .hole-lbl{font-family:'Inter',sans-serif;font-size:9px;font-weight:700;color:var(--text-light);letter-spacing:1px;text-transform:uppercase;}
+.hi-wrap{position:relative;display:inline-block;}
+.stroke-corner{position:absolute;top:2px;right:2px;display:flex;gap:1px;pointer-events:none;z-index:2;}
+.stroke-dot{width:5px;height:5px;border-radius:50%;background:#b8965a;display:block;box-shadow:0 0 0 1px rgba(255,255,255,0.8);}
+.sc-hi-wrap{position:relative;display:inline-block;line-height:0;}
 .hi{width:40px;height:38px;border:1px solid var(--border);border-radius:2px;text-align:center;font-size:16px;font-weight:600;font-family:'Inter',sans-serif;color:var(--text);background:var(--white);padding:0;}
 .hi:focus{outline:2px solid var(--gold);border-color:var(--gold);}
 .hi.eagle{background:#0a1e38;color:#90c0f0;border-color:#1a3a5c;}
@@ -211,6 +215,7 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
     <button class="nav-btn" onclick="showTab('myscores',this)">✏️ My Scores</button>
     <button class="nav-btn" onclick="showTab('scorecard',this)">⛳ Scorecards</button>
     <button class="nav-btn" onclick="showTab('pairings',this)">👥 Pairings</button>
+    <button class="nav-btn" onclick="showTab('team',this)">⚔️ Team Cup</button>
     <button class="nav-btn" onclick="showTab('shootout',this)">🎯 Shootout</button>
     <button class="nav-btn" onclick="showTab('golfers',this)">📋 Golfers</button>
     <button class="nav-btn" onclick="showTab('agenda',this)">📅 Agenda</button>
@@ -400,6 +405,13 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
   </div></div>
 </div>
 
+<!-- TEAM CUP -->
+<div id="tab-team" class="tab-content">
+  <div class="section-title">⚔️ Team Cup</div>
+  <p class="section-sub"><span class="live-dot"></span>Live · Ryder Cup-style team competition · Rounds 3 &amp; 6</p>
+  <div id="team-cup-content"></div>
+</div>
+
 <!-- SCORING ADMIN -->
 <div id="tab-admin" class="tab-content"></div>
 
@@ -496,6 +508,9 @@ const RNAMES=['','Modified Stableford','4-Person Scramble','2v2 Best Ball Match 
 const RVENUES=['','Wild Horse','Wild Horse','Bayside','Bayside','Wild Horse','Wild Horse'];
 
 let ME=null,golfers=[],holeScores={},roundResults={},pairingsData={},shootoutSt={};
+let teamComp={team_a_name:'Team A',team_b_name:'Team B',team_a_captain_id:null,team_b_captain_id:null};
+let teamPlayers={}; // {golfer_id: 'A'|'B'}
+let teamMatches={}; // {round: {match_num: {a1,a2,b1,b2}}}
 let curMyR=1,curSCR=1,curPairR=1;
 let saveTimers={};
 let IS_ADMIN=false;
@@ -575,15 +590,18 @@ async function enterApp(){
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display=IS_ADMIN?'':'none');
   await loadAll();
   setupRealtime();
-  renderLB();renderMyScores(1);renderSC(1);renderPairings(1);renderShootout();renderGolfers();renderScoringAdmin();
+  renderLB();renderMyScores(1);renderSC(1);renderPairings(1);renderShootout();renderGolfers();renderScoringAdmin();renderTeamCup();
 }
 
 async function loadAll(){
-  const [hs,rr,pr,so]=await Promise.all([
+  const [hs,rr,pr,so,tc,tp,tm]=await Promise.all([
     sb.from('hole_scores').select('*'),
     sb.from('round_results').select('*'),
     sb.from('pairings').select('*').order('group_num'),
     sb.from('shootout').select('*'),
+    sb.from('team_competition').select('*').limit(1),
+    sb.from('team_players').select('*'),
+    sb.from('team_matches').select('*'),
   ]);
   holeScores={};
   (hs.data||[]).forEach(s=>{
@@ -597,6 +615,17 @@ async function loadAll(){
   (pr.data||[]).forEach(p=>{if(!pairingsData[p.round])pairingsData[p.round]=[];pairingsData[p.round].push(p);});
   shootoutSt={};
   (so.data||[]).forEach(s=>{shootoutSt[s.golfer_id]=s;});
+  // Team competition
+  if(tc.data&&tc.data[0]) teamComp=tc.data[0];
+  teamPlayers={};
+  (tp.data||[]).forEach(p=>{teamPlayers[p.golfer_id]=p.team;});
+  teamMatches={};
+  (tm.data||[]).forEach(m=>{
+    if(!teamMatches[m.round])teamMatches[m.round]={};
+    teamMatches[m.round][m.match_num]={a1:m.a1_golfer_id,a2:m.a2_golfer_id,b1:m.b1_golfer_id,b2:m.b2_golfer_id};
+  });
+  // Sync team matches into pairings data for R3/R6
+  syncTeamMatchesToPairings();
 }
 
 function setupRealtime(){
@@ -608,6 +637,7 @@ function setupRealtime(){
       renderLB();
       if(document.getElementById('tab-scorecard').classList.contains('active'))renderSC(curSCR);
       if(document.getElementById('tab-admin').classList.contains('active'))renderScoringAdmin();
+      if(document.getElementById('tab-team').classList.contains('active'))renderTeamCup();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'round_results'},async()=>{
       const {data}=await sb.from('round_results').select('*');
@@ -619,6 +649,23 @@ function setupRealtime(){
       const {data}=await sb.from('golfers').select('*').order('id');
       golfers=data||[];ME=golfers.find(g=>g.id===ME.id)||ME;
       renderGolfers();renderLB();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'team_players'},async()=>{
+      const {data}=await sb.from('team_players').select('*');
+      teamPlayers={};(data||[]).forEach(p=>{teamPlayers[p.golfer_id]=p.team;});
+      if(document.getElementById('tab-team').classList.contains('active'))renderTeamCup();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'team_matches'},async()=>{
+      const {data}=await sb.from('team_matches').select('*');
+      teamMatches={};
+      (data||[]).forEach(m=>{if(!teamMatches[m.round])teamMatches[m.round]={};teamMatches[m.round][m.match_num]={a1:m.a1_golfer_id,a2:m.a2_golfer_id,b1:m.b1_golfer_id,b2:m.b2_golfer_id};});
+      syncTeamMatchesToPairings();
+      if(document.getElementById('tab-team').classList.contains('active'))renderTeamCup();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'team_competition'},async()=>{
+      const {data}=await sb.from('team_competition').select('*').limit(1);
+      if(data&&data[0])teamComp=data[0];
+      if(document.getElementById('tab-team').classList.contains('active'))renderTeamCup();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'shootout'},async()=>{
       const {data}=await sb.from('shootout').select('*');
@@ -672,44 +719,138 @@ function showMyRound(r,btn){
   renderMyScores(r);
 }
 
+// Points earned on a single hole for Stableford
+function holeStablefordPts(gross, par){
+  if(!gross||gross<1) return null;
+  const d=gross-par;
+  if(d<=-2) return 8;
+  if(d===-1) return 4;
+  if(d===0)  return 2;
+  if(d===1)  return 1;
+  return 0;
+}
+// Stableford chip color
+function sfPtsColor(pts){
+  if(pts===null) return 'background:#f0f0f0;color:#aaa;';
+  if(pts>=8) return 'background:#0a1e38;color:#90c0f0;';
+  if(pts>=4) return 'background:#0a2e18;color:#70d490;';
+  if(pts>=2) return 'background:#e8f0ff;color:var(--navy);';
+  if(pts===1) return 'background:#fdf0e8;color:#8b3a00;';
+  return 'background:#fde8e8;color:#8b1a1a;';
+}
+
 function renderMyScores(r){
   const gid=ME.id,hdcp=parseFloat(ME.hdcp);
   const sc=holeScores[r]?.[gid]||{};
   const course=ROUND_COURSE[r];
   const par=course.par;
-  html=`<div class="format-box"><strong>Round ${r} @ ${course.name} — ${RNAMES[r]}</strong><br>
-    <span style="font-size:12px;">Your handicap: ${hdcp} · Stableford Quota (R1/R5): ${38-hdcp}</span></div>`;
+  const isR1=r===1;
+  const quota=38-hdcp;
+  let html=`<div class="format-box"><strong>Round ${r} @ ${course.name} — ${RNAMES[r]}</strong><br>
+    <span style="font-size:12px;">Your handicap: ${hdcp}${isR1?` · Stableford Quota: <strong>${quota}</strong> (Eagle=8, Birdie=4, Par=2, Bogey=1)`:''}</span></div>`;
+
   html+=`<div class="score-panel"><div class="score-panel-hdr"><h3>${ME.name} — Round ${r}</h3><span class="my-tag">✏️ Your Card</span></div><div class="hole-grid">`;
+  const myGolferIdx=golfers.findIndex(g=>g.id===ME.id);
+  const hdcpPctMy=getHdcpPct(r,myGolferIdx);
+  const showStrokesMy=SHOW_STROKES_ROUNDS.includes(r);
   for(let h=1;h<=18;h++){
     const v=sc[h]||'';
     const cl=v?holeColor(v,par[h-1]):'';
-    html+=`<div class="hole-cell"><div class="hole-lbl">H${h}<span style="display:block;font-size:8px;color:var(--text-muted);">P${par[h-1]}</span></div>
-      <input type="number" min="1" max="15" class="hi ${cl}" id="mh_${r}_${h}" value="${v}" placeholder="${par[h-1]}"
-        oninput="onHoleInput(this,${r},${h},${h-1},${r})"></div>`;
+    const sfPts=isR1?holeStablefordPts(v?+v:null,par[h-1]):null;
+    const strokes=showStrokesMy?getStrokes(hdcp,course.hdcp[h-1],hdcpPctMy):0;
+    html+=`<div class="hole-cell">
+      <div class="hole-lbl">H${h}<span style="display:block;font-size:8px;color:var(--text-muted);">P${par[h-1]}</span></div>
+      <div class="hi-wrap">
+        <input type="number" min="1" max="15" class="hi ${cl}" id="mh_${r}_${h}" value="${v}" placeholder="${par[h-1]}"
+          oninput="onHoleInput(this,${r},${h},${h-1},${r})" style="${strokes>0?'border-color:#b8965a;border-width:2px;':''}">
+        ${cornerDots(strokes)}
+      </div>
+      ${isR1?`<div style="font-size:10px;font-weight:700;min-width:28px;text-align:center;padding:1px 4px;border-radius:2px;${sfPtsColor(sfPts)}" id="sfh_${r}_${h}">${sfPts!==null?sfPts:'·'}</div>`:''}
+    </div>`;
     if(h===9)html+=`<div class="hole-divider"></div>`;
   }
   html+=`</div>`;
+
   const f=Object.entries(sc).filter(([h])=>+h<=9).reduce((a,[,s])=>a+s,0);
   const b=Object.entries(sc).filter(([h])=>+h>9).reduce((a,[,s])=>a+s,0);
-  const tot=f+b; const net=tot?tot-hdcp:0;
+  const tot=f+b;
+  const net=tot?tot-hdcp:0;
   const fPar=par.slice(0,9).reduce((a,b)=>a+b,0);
   const bPar=par.slice(9).reduce((a,b)=>a+b,0);
   const toPar=tot?(tot-(fPar+bPar)):null;
+
+  let sfFront=0,sfBack=0,sfTotal=0;
+  if(isR1){
+    for(let h=1;h<=9;h++){const v=sc[h];if(v)sfFront+=holeStablefordPts(+v,par[h-1])||0;}
+    for(let h=10;h<=18;h++){const v=sc[h];if(v)sfBack+=holeStablefordPts(+v,par[h-1])||0;}
+    sfTotal=sfFront+sfBack;
+  }
+  const vsQuota=isR1&&sfTotal?(sfTotal-quota):null;
+
   html+=`<div class="totals-bar">
     <div class="tot-item"><div class="tot-lbl">Front</div><div class="tot-val" id="tot-f-${r}">${f||'—'}</div></div>
     <div class="tot-item"><div class="tot-lbl">Back</div><div class="tot-val" id="tot-b-${r}">${b||'—'}</div></div>
     <div class="tot-item"><div class="tot-lbl">Gross</div><div class="tot-val" id="tot-g-${r}">${tot||'—'}</div></div>
-    <div class="tot-item"><div class="tot-lbl">+/- Par</div><div class="tot-val" id="tot-p-${r}" style="color:${toPar===0?'var(--green)':toPar>0?'var(--red)':'#0a5c36'}">${toPar!==null?(toPar>0?'+':'')+toPar:'—'}</div></div>
+    <div class="tot-item"><div class="tot-lbl">+/- Par</div><div class="tot-val" id="tot-p-${r}" style="color:${toPar===0?'var(--navy)':toPar>0?'var(--red)':'#0a5c36'}">${toPar!==null?(toPar>0?'+':'')+toPar:'—'}</div></div>
     <div class="tot-item"><div class="tot-lbl">Net</div><div class="tot-val" id="tot-n-${r}">${tot?Math.round(net):'—'}</div></div>
+    ${isR1?`
+    <div class="tot-item" style="border:2px solid var(--gold);"><div class="tot-lbl">SF Pts</div><div class="tot-val" id="tot-sf-${r}" style="color:var(--navy);">${sfTotal||'—'}</div></div>
+    <div class="tot-item" style="border:2px solid var(--navy);background:var(--navy);"><div class="tot-lbl" style="color:var(--gold-light);">vs Quota</div><div class="tot-val" id="tot-vq-${r}" style="color:${vsQuota>0?'#70d490':vsQuota<0?'#f08080':'var(--gold-light)'};">${vsQuota!==null?(vsQuota>0?'+':'')+vsQuota:'—'}</div></div>`:''}
   </div></div>`;
+
   const rr=roundResults[r]?.[gid];
   if(rr)html+=`<div class="card"><div class="card-body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
     <span style="font-size:14px;font-weight:600;">Round ${r} DBI Points:</span>
     <span class="pts-chip" style="font-size:18px;padding:4px 14px;">${rr.dbi_points}</span>
     ${rr.place?`<span style="font-size:13px;color:var(--text-muted);">Finished ${rr.place}${ord(rr.place)}</span>`:''}
   </div></div>`;
+
+  // Match play summary card for R3 and R6
+  if(MATCH_ROUNDS.includes(r)){
+    const myIdx=golfers.findIndex(g=>g.id===ME.id);
+    let myGroupIdx=-1, myTeam=null;
+    const grps=pairingsData[r]||[];
+    grps.forEach((grp,gi)=>{
+      const pi=grp.player_indices||[];
+      if(pi.slice(0,2).includes(myIdx)){myGroupIdx=gi;myTeam='A';}
+      if(pi.slice(2,4).includes(myIdx)){myGroupIdx=gi;myTeam='B';}
+    });
+    if(myGroupIdx>=0){
+      const teams=getMatchTeams(r,myGroupIdx);
+      const holeResults=calcMatchHoles(r,myGroupIdx);
+      const runningStatus=calcRunningStatus(holeResults);
+      const nassau=calcNassau(holeResults);
+      const latestStatus=runningStatus.filter(s=>s!==null).slice(-1)[0]||null;
+      const oppTeam=myTeam==='A'?'B':'A';
+      const myName=myTeam==='A'?teams.nameA:teams.nameB;
+      const oppName=myTeam==='A'?teams.nameB:teams.nameA;
+
+      html+=`<div class="card"><div class="card-header" style="background:#0a1628;border-bottom:2px solid var(--gold);">
+        <span>Match Play · ${myName} <span style="color:rgba(255,255,255,0.4);">vs</span> ${oppName}</span>
+        <span style="margin-left:auto;">${latestStatus?matchStatusBadge(latestStatus):'<span style="font-size:11px;color:rgba(255,255,255,0.4);">Not started</span>'}</span>
+      </div>
+      <div class="card-body" style="padding:12px 16px;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+          ${holeResults.map((res,i)=>{
+            const chip=res?holeResultChip(res,myTeam):`<span style="font-size:9px;color:var(--text-light);background:var(--parchment);border-radius:2px;padding:1px 4px;">H${i+1}</span>`;
+            const status=runningStatus[i];
+            return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+              ${chip}
+              ${status?`<span style="font-size:8px;font-weight:700;color:${status==='AS'?'#888':status.startsWith(myTeam)?'#0a5c36':'#8b1a1a'};">${status==='AS'?'SQ':status.replace('UP','')}</span>`:''}
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <div class="tot-item"><div class="tot-lbl">Front 9</div><div class="tot-val" style="font-size:14px;${(()=>{const d=myTeam==='A'?nassau.frontLead:-nassau.frontLead;return d>0?'color:#0a5c36;':d<0?'color:#8b1a1a;':'';})()} ">${nassau.frontPlayed?matchStatusBadge(nassau.frontLead===0?'AS':nassau.frontLead>0?`A${nassau.frontLead}UP`:`B${Math.abs(nassau.frontLead)}UP`):'—'}</div></div>
+          <div class="tot-item"><div class="tot-lbl">Back 9</div><div class="tot-val" style="font-size:14px;">${nassau.backPlayed?matchStatusBadge(nassau.backLead===0?'AS':nassau.backLead>0?`A${nassau.backLead}UP`:`B${Math.abs(nassau.backLead)}UP`):'—'}</div></div>
+          <div class="tot-item" style="border:2px solid var(--navy);"><div class="tot-lbl">Overall</div><div class="tot-val" style="font-size:14px;">${latestStatus?matchStatusBadge(latestStatus):'—'}</div></div>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">Nassau: each 9 and overall are separate bets — 3 pts each + 3 pt winning team bonus.</p>
+      </div></div>`;
+    }
+  }
+
   document.getElementById('my-scores-content').innerHTML=html;
-  let html2=''; // reset
 }
 
 function onHoleInput(inp,r,h,pi){
@@ -736,11 +877,31 @@ async function persistHole(r,h,v,golferId){
 
 function updateTotals(r){
   const sc=holeScores[r]?.[ME.id]||{};
+  const course=ROUND_COURSE[r];
+  const par=course.par;
   const f=Object.entries(sc).filter(([h])=>+h<=9).reduce((a,[,s])=>a+s,0);
   const b=Object.entries(sc).filter(([h])=>+h>9).reduce((a,[,s])=>a+s,0);
   const tot=f+b;const net=tot?tot-parseFloat(ME.hdcp):0;
+  const fPar=par.slice(0,9).reduce((a,b)=>a+b,0);
+  const bPar=par.slice(9).reduce((a,b)=>a+b,0);
+  const toPar=tot?(tot-(fPar+bPar)):null;
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  set(`tot-f-${r}`,f||'—');set(`tot-b-${r}`,b||'—');set(`tot-g-${r}`,tot||'—');set(`tot-n-${r}`,tot?Math.round(net):'—');
+  set(`tot-f-${r}`,f||'—');set(`tot-b-${r}`,b||'—');set(`tot-g-${r}`,tot||'—');
+  set(`tot-n-${r}`,tot?Math.round(net):'—');
+  const tp=document.getElementById(`tot-p-${r}`);
+  if(tp){tp.textContent=toPar!==null?(toPar>0?'+':'')+toPar:'—';tp.style.color=toPar===0?'var(--navy)':toPar>0?'var(--red)':'#0a5c36';}
+  // Stableford live update for R1
+  if(r===1){
+    let sfF=0,sfB=0;
+    for(let h=1;h<=9;h++){const v=sc[h];if(v){const p=holeStablefordPts(+v,par[h-1]);sfF+=p||0;const chip=document.getElementById(`sfh_1_${h}`);if(chip){chip.textContent=p!==null?p:'·';chip.style.cssText=`font-size:10px;font-weight:700;min-width:28px;text-align:center;padding:1px 4px;border-radius:2px;${sfPtsColor(p)}`;}}};
+    for(let h=10;h<=18;h++){const v=sc[h];if(v){const p=holeStablefordPts(+v,par[h-1]);sfB+=p||0;const chip=document.getElementById(`sfh_1_${h}`);if(chip){chip.textContent=p!==null?p:'·';chip.style.cssText=`font-size:10px;font-weight:700;min-width:28px;text-align:center;padding:1px 4px;border-radius:2px;${sfPtsColor(p)}`;}}};
+    const sfTot=sfF+sfB;
+    const quota=38-parseFloat(ME.hdcp);
+    const vsQ=sfTot?(sfTot-quota):null;
+    set(`tot-sf-1`,sfTot||'—');
+    const vqEl=document.getElementById('tot-vq-1');
+    if(vqEl){vqEl.textContent=vsQ!==null?(vsQ>0?'+':'')+vsQ:'—';vqEl.style.color=vsQ>0?'#70d490':vsQ<0?'#f08080':'var(--gold-light)';}
+  }
 }
 
 // ===================== SCORECARDS =====================
@@ -760,14 +921,17 @@ function getStrokes(playerHdcp, holeHdcpIndex, hdcpPct=1.0){
   return full + (holeHdcpIndex<=remainder ? 1 : 0);
 }
 
-// Stroke dot HTML: • = 1 stroke, •• = 2 strokes
 function strokeTitle(n){return n+' stroke'+(n>1?'s':'');}
 
-function strokeDot(n){
+// Corner dot overlay HTML — goes inside a position:relative wrapper
+function cornerDots(n){
   if(n<=0) return '';
-  if(n===1) return `<span style="color:#c9a227;font-size:10px;line-height:1;display:block;text-align:center;">●</span>`;
-  return `<span style="color:#c9a227;font-size:10px;line-height:1;display:block;text-align:center;">●●</span>`;
+  const dots=Array(Math.min(n,2)).fill('<span class="stroke-dot"></span>').join('');
+  return `<span class="stroke-corner" title="${strokeTitle(n)}">${dots}</span>`;
 }
+
+// Legacy — kept for any remaining references
+function strokeDot(n){ return ''; }
 
 // Get hdcp% for a golfer in a given round
 // For R6 match play: player 0&1 in a group = A(70%), players 2&3 = B(30%)
@@ -790,6 +954,120 @@ function getHdcpPct(r, golferIdx){
 // Which rounds show stroke dots?
 // R1=quota based (show for reference), R3=match play net (critical), R4=shamble, R5=net, R6=match play
 const SHOW_STROKES_ROUNDS=[1,3,4,5,6];
+const MATCH_ROUNDS=[3,6];
+
+// ===================== MATCH PLAY ENGINE =====================
+
+// Get net score for a golfer on a specific hole
+function getNetScore(golferId, hole, r, hdcpPct){
+  const gross=holeScores[r]?.[golferId]?.[hole];
+  if(!gross) return null;
+  const g=golfers.find(x=>x.id===golferId);
+  if(!g) return null;
+  const course=ROUND_COURSE[r];
+  const strokes=getStrokes(g.hdcp, course.hdcp[hole-1], hdcpPct);
+  return gross - strokes;
+}
+
+// Get the golfer IDs and hdcp percentages for each team in a match group
+function getMatchTeams(r, groupIdx){
+  const grp=(pairingsData[r]||[])[groupIdx];
+  if(!grp) return null;
+  const pi=grp.player_indices||[];
+  if(r===3){
+    // Best ball: Team A = slots 0,1 (full hdcp); Team B = slots 2,3 (full hdcp)
+    return {
+      teamA: pi.slice(0,2).map(i=>({id:golfers[i]?.id, pct:1.0, idx:i})).filter(x=>x.id),
+      teamB: pi.slice(2,4).map(i=>({id:golfers[i]?.id, pct:1.0, idx:i})).filter(x=>x.id),
+      nameA: pi.slice(0,2).map(i=>golfers[i]?.name?.split(' ')[0]||'?').join(' & '),
+      nameB: pi.slice(2,4).map(i=>golfers[i]?.name?.split(' ')[0]||'?').join(' & '),
+    };
+  }
+  if(r===6){
+    // Scramble: Team A = slots 0(70%),1(30%); Team B = slots 2(70%),3(30%)
+    return {
+      teamA: [{id:golfers[pi[0]]?.id, pct:0.7, idx:pi[0]},{id:golfers[pi[1]]?.id, pct:0.3, idx:pi[1]}].filter(x=>x.id),
+      teamB: [{id:golfers[pi[2]]?.id, pct:0.7, idx:pi[2]},{id:golfers[pi[3]]?.id, pct:0.3, idx:pi[3]}].filter(x=>x.id),
+      nameA: `${golfers[pi[0]]?.name?.split(' ')[0]||'?'} & ${golfers[pi[1]]?.name?.split(' ')[0]||'?'}`,
+      nameB: `${golfers[pi[2]]?.name?.split(' ')[0]||'?'} & ${golfers[pi[3]]?.name?.split(' ')[0]||'?'}`,
+    };
+  }
+  return null;
+}
+
+// Calculate hole-by-hole match play results for a group
+// Returns array of 18 results: 'A'=Team A wins, 'B'=Team B wins, 'H'=halved, null=not played
+function calcMatchHoles(r, groupIdx){
+  const teams=getMatchTeams(r, groupIdx);
+  if(!teams) return Array(18).fill(null);
+  return Array.from({length:18},(_,i)=>{
+    const h=i+1;
+    // Best net score from each team
+    const netsA=teams.teamA.map(p=>getNetScore(p.id,h,r,p.pct)).filter(n=>n!==null);
+    const netsB=teams.teamB.map(p=>getNetScore(p.id,h,r,p.pct)).filter(n=>n!==null);
+    if(!netsA.length||!netsB.length) return null;
+    const bestA=Math.min(...netsA);
+    const bestB=Math.min(...netsB);
+    if(bestA<bestB) return 'A';
+    if(bestB<bestA) return 'B';
+    return 'H';
+  });
+}
+
+// Calculate running match status after each hole
+// Returns array of 18 status strings: e.g. "A1UP", "AS", "B2UP"
+function calcRunningStatus(holeResults){
+  let aWins=0, bWins=0;
+  return holeResults.map(res=>{
+    if(res===null) return null;
+    if(res==='A') aWins++;
+    if(res==='B') bWins++;
+    const diff=aWins-bWins;
+    if(diff===0) return 'AS';
+    return diff>0?`A${diff}UP`:`B${Math.abs(diff)}UP`;
+  });
+}
+
+// Nassau status: returns {front, back, overall} each as 'A'/'B'/'T'/null
+function calcNassau(holeResults){
+  const frontRes=holeResults.slice(0,9).filter(r=>r!==null);
+  const backRes=holeResults.slice(9).filter(r=>r!==null);
+  const count=arr=>({A:arr.filter(r=>r==='A').length, B:arr.filter(r=>r==='B').length});
+  const winner=({A,B})=>A>B?'A':B>A?'B':'T';
+  const f=count(frontRes), b=count(backRes), all=count(holeResults.filter(r=>r!==null));
+  return {
+    front: frontRes.length===9?winner(f):null,
+    back:  backRes.length===9?winner(b):null,
+    overall: holeResults.filter(r=>r!==null).length===18?winner(all):null,
+    frontLead: f.A-f.B, backLead: b.A-b.B, totalLead: all.A-all.B,
+    frontPlayed: frontRes.length, backPlayed: backRes.length
+  };
+}
+
+// Hole result chip HTML
+function holeResultChip(res, forTeam){
+  if(res===null) return `<span style="font-size:9px;color:var(--text-light);">—</span>`;
+  const win=(forTeam==='A'&&res==='A')||(forTeam==='B'&&res==='B');
+  const loss=(forTeam==='A'&&res==='B')||(forTeam==='B'&&res==='A');
+  const half=res==='H';
+  if(win)  return `<span style="font-size:9px;font-weight:700;color:#0a2e18;background:#70d490;border-radius:2px;padding:1px 3px;">W</span>`;
+  if(loss) return `<span style="font-size:9px;font-weight:700;color:#3a0a0a;background:#f08080;border-radius:2px;padding:1px 3px;">L</span>`;
+  return   `<span style="font-size:9px;font-weight:700;color:#444;background:#ddd;border-radius:2px;padding:1px 3px;">H</span>`;
+}
+
+// Match status badge HTML
+function matchStatusBadge(status){
+  if(!status) return '—';
+  if(status==='AS') return `<span style="font-size:10px;font-weight:700;background:#e8e4d0;color:#444;border-radius:2px;padding:2px 5px;">ALL SQ</span>`;
+  const teamA=status.startsWith('A');
+  const num=parseInt(status.replace(/[AB]|UP/g,''));
+  const bg=teamA?'#0a2e18':'#3a0a0a';
+  const col=teamA?'#70d490':'#f08080';
+  const label=teamA?`A ${num}UP`:`B ${num}UP`;
+  return `<span style="font-size:10px;font-weight:700;background:${bg};color:${col};border-radius:2px;padding:2px 6px;">${label}</span>`;
+}
+
+
 
 function renderSC(r){
   const div=document.getElementById('scorecard-content');
@@ -839,6 +1117,7 @@ function renderSC(r){
       <th>OUT</th>
       ${par.slice(9).map((_,i)=>`<th>${i+10}</th>`).join('')}
       <th>IN</th><th>TOT</th><th>NET</th>
+      ${r===1?'<th style="background:#b8965a;color:#0a1628;">SF</th><th style="background:#b8965a;color:#0a1628;">vs Q</th>':''}
     </tr>
     <tr class="par-row">
       <td class="nc" style="font-weight:700;color:var(--navy);">Par</td><td></td>
@@ -846,6 +1125,7 @@ function renderSC(r){
       <td class="tot-cell">${fPar}</td>
       ${par.slice(9).map(p=>`<td>${p}</td>`).join('')}
       <td class="tot-cell">${bPar}</td><td class="tot-cell">${fPar+bPar}</td><td></td>
+      ${r===1?'<td class="tot-cell"></td><td class="tot-cell"></td>':''}
     </tr>
     <tr class="par-row">
       <td class="nc" style="color:${course.tees[selTee].color};font-weight:700;">${selTee} Tees</td><td></td>
@@ -854,6 +1134,7 @@ function renderSC(r){
       ${teeData.yards.slice(9).map(y=>`<td style="font-size:10px;">${y}</td>`).join('')}
       <td class="tot-cell" style="font-size:10px;">${bYds}</td>
       <td class="tot-cell" style="font-size:10px;">${totYds}</td><td></td>
+      ${r===1?'<td></td><td></td>':''}
     </tr>
     <tr class="par-row">
       <td class="nc" style="color:var(--text-muted);">HCP Index</td><td></td>
@@ -861,6 +1142,7 @@ function renderSC(r){
       <td class="tot-cell"></td>
       ${hdcpIndex.slice(9).map(h=>`<td style="font-size:10px;color:var(--text-muted);">${h}</td>`).join('')}
       <td class="tot-cell"></td><td class="tot-cell"></td><td></td>
+      ${r===1?'<td></td><td></td>':''}
     </tr>
   </thead><tbody>`;
 
@@ -876,34 +1158,44 @@ function renderSC(r){
     const net=tot?tot-adjHdcp:'';
     const rowStyle=isMe?'me-row':canEdit?'can-edit-row':'';
 
+    // Find which group this golfer is in (for match play)
+    let golferGroupIdx=-1, golferTeam=null;
+    if(isMatchRound){
+      const myIdx=gi;
+      Object.entries(matchGroupData).forEach(([gIdx,md])=>{
+        if(!md.teams) return;
+        if(md.teams.teamA.find(p=>p.idx===myIdx)){golferGroupIdx=+gIdx;golferTeam='A';}
+        if(md.teams.teamB.find(p=>p.idx===myIdx)){golferGroupIdx=+gIdx;golferTeam='B';}
+      });
+    }
+    const matchData=golferGroupIdx>=0?matchGroupData[golferGroupIdx]:null;
+
     // HCP cell — show adjusted hdcp if not full
     const hdcpDisplay=hdcpPct===1.0
       ?`${g.hdcp}`
       :`${g.hdcp}<span style="font-size:9px;color:var(--text-muted);display:block;">${Math.round(hdcpPct*100)}%→${adjHdcp}</span>`;
 
+    // Team label for match rounds
+    const teamLabel=isMatchRound&&golferTeam?` <span style="font-size:9px;font-weight:700;padding:1px 4px;border-radius:2px;background:${golferTeam==='A'?'#0a2e18':'#3a0a0a'};color:${golferTeam==='A'?'#70d490':'#f08080'};">T${golferTeam}</span>`:'';
+
     html+=`<tr class="${rowStyle}" title="${canEdit&&!isMe?'Your group — you can enter scores':''}">
-      <td class="nc">${g.name}${isMe?' ★':''}${canEdit&&!isMe?' <span style="font-size:9px;color:var(--gold);">✎</span>':''}</td>
+      <td class="nc">${g.name}${isMe?' ★':''}${teamLabel}${canEdit&&!isMe?' <span style="font-size:9px;color:var(--gold);">✎</span>':''}</td>
       <td style="font-size:12px;">${hdcpDisplay}</td>`;
+
+    // Helper to build a scorecard cell with corner stroke dots
+    const mkCell=(h,v,cl,strokes,editable)=>{
+      const bStyle=strokes>0?'border-color:#b8965a;border-width:2px;':'';
+      if(editable){
+        return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="onHoleInputForGolfer(this,${r},${h},${h-1},${g.id})" style="${bStyle}"></div></td>`;
+      }
+      return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1" style="${bStyle}"></div></td>`;
+    };
 
     h18.slice(0,9).forEach(h=>{
       const v=sc[h]||'';
       const cl=v?holeColor(v,par[h-1]):'';
       const strokes=showStrokes?getStrokes(g.hdcp,hdcpIndex[h-1],hdcpPct):0;
-      const dot=strokeDot(strokes);
-      if(canEdit){
-        html+=`<td style="padding:2px 3px;">
-          ${dot}
-          <input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15"
-            oninput="onHoleInputForGolfer(this,${r},${h},${h-1},${g.id})"
-            style="${strokes>0?'border-color:#c9a227;':''}" title="${strokes>0?strokeTitle(strokes):''}">>
-        </td>`;
-      } else {
-        html+=`<td style="padding:2px 3px;">
-          ${dot}
-          <input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"
-            style="${strokes>0?'border-color:#c9a227;':''}" title="${strokes>0?strokeTitle(strokes):''}">
-        </td>`;
-      }
+      html+=mkCell(h,v,cl,strokes,canEdit);
     });
 
     html+=`<td class="tot-cell">${f||'—'}</td>`;
@@ -912,28 +1204,60 @@ function renderSC(r){
       const v=sc[h]||'';
       const cl=v?holeColor(v,par[h-1]):'';
       const strokes=showStrokes?getStrokes(g.hdcp,hdcpIndex[h-1],hdcpPct):0;
-      const dot=strokeDot(strokes);
-      if(canEdit){
-        html+=`<td style="padding:2px 3px;">
-          ${dot}
-          <input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15"
-            oninput="onHoleInputForGolfer(this,${r},${h},${h-1},${g.id})"
-            style="${strokes>0?'border-color:#c9a227;':''}">
-        </td>`;
-      } else {
-        html+=`<td style="padding:2px 3px;">
-          ${dot}
-          <input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"
-            style="${strokes>0?'border-color:#c9a227;':''}">
-        </td>`;
-      }
+      html+=mkCell(h,v,cl,strokes,canEdit);
     });
 
-    html+=`<td class="tot-cell">${tot||'—'}</td><td class="tot-cell">${net?Math.round(net):'—'}</td></tr>`;
+    // Stableford per golfer for R1
+    let sfTot=0;
+    if(r===1){
+      h18.forEach(h=>{const v=sc[h];if(v)sfTot+=holeStablefordPts(+v,par[h-1])||0;});
+    }
+    const quota=38-parseFloat(g.hdcp);
+    const vsQ=r===1&&sfTot?(sfTot-quota):null;
+    html+=`<td class="tot-cell">${tot||'—'}</td><td class="tot-cell">${net?Math.round(net):'—'}</td>
+      ${r===1?`<td class="tot-cell" style="background:#f0e8d0;font-weight:700;color:var(--navy);">${sfTot||'—'}</td>
+      <td class="tot-cell" style="${vsQ>0?'background:#0a2e18;color:#70d490;':vsQ<0?'background:#3a0a0a;color:#f08080;':'background:#1a2e50;color:#b8d0f8;'}font-weight:700;">${vsQ!==null?(vsQ>0?'+':'')+vsQ:'—'}</td>`:''}
+      ${isMatchRound&&matchData?`<td class="tot-cell" style="background:#0e1e38;padding:3px 4px;">
+        ${matchData.runningStatus[17]!==null?matchStatusBadge(matchData.runningStatus[17]):(matchData.runningStatus.filter(s=>s!==null).slice(-1)[0]?matchStatusBadge(matchData.runningStatus.filter(s=>s!==null).slice(-1)[0]):'<span style="font-size:9px;color:rgba(255,255,255,0.3);">—</span>')}
+      </td>`:''}
+    </tr>
+    ${isMatchRound&&matchData?`<tr style="background:#f8f4ec;">
+      <td class="nc" style="font-size:10px;color:var(--text-muted);font-style:italic;">Result vs T${golferTeam==='A'?'B':'A'}</td><td></td>
+      ${h18.slice(0,9).map(h=>`<td style="text-align:center;padding:2px;">${holeResultChip(matchData.holeResults[h-1],golferTeam)}</td>`).join('')}
+      <td class="tot-cell" style="font-size:10px;">${(()=>{const f9=matchData.holeResults.slice(0,9).filter(x=>x!==null);const aW=f9.filter(x=>x==='A').length,bW=f9.filter(x=>x==='B').length;const diff=golferTeam==='A'?aW-bW:bW-aW;return f9.length?`<span style="font-weight:700;color:${diff>0?'#0a2e18':diff<0?'#3a0a0a':'#444'}">${diff>0?`+${diff}`:diff}</span>`:'—';})()} </td>
+      ${h18.slice(9).map(h=>`<td style="text-align:center;padding:2px;">${holeResultChip(matchData.holeResults[h-1],golferTeam)}</td>`).join('')}
+      <td class="tot-cell" style="font-size:10px;">${(()=>{const b9=matchData.holeResults.slice(9).filter(x=>x!==null);const aW=b9.filter(x=>x==='A').length,bW=b9.filter(x=>x==='B').length;const diff=golferTeam==='A'?aW-bW:bW-aW;return b9.length?`<span style="font-weight:700;color:${diff>0?'#0a2e18':diff<0?'#3a0a0a':'#444'}">${diff>0?`+${diff}`:diff}</span>`:'—';})()} </td>
+      <td></td><td></td>
+      <td class="tot-cell" style="background:#0e1e38;padding:3px 4px;">${matchStatusBadge(matchData.runningStatus.filter(s=>s!==null).slice(-1)[0]||null)}</td>
+    </tr>`:''}`;
   });
 
+  // After all golfer rows, add match summary rows for match rounds
+  if(isMatchRound){
+    Object.entries(matchGroupData).forEach(([gi,md])=>{
+      if(!md||!md.teams) return;
+      const nassau=md.nassau;
+      const statusNow=md.runningStatus.filter(s=>s!==null).slice(-1)[0]||null;
+      const fLeadStr=nassau.frontPlayed>0?(()=>{const d=nassau.frontLead;return d===0?'ALL SQ':d>0?`A ${d}UP`:`B ${Math.abs(d)}UP`;})():'—';
+      const bLeadStr=nassau.backPlayed>0?(()=>{const d=nassau.backLead;return d===0?'ALL SQ':d>0?`A ${d}UP`:`B ${Math.abs(d)}UP`;})():'—';
+      const statusColor=s=>{if(!s||s==='ALL SQ')return'#888';return s.startsWith('A')?'#70d490':'#f08080';};
+      html+=`<tr style="background:#0a1628;color:white;">
+        <td class="nc" colspan="2" style="font-size:10px;font-weight:700;color:var(--gold-light);padding:6px 10px;">
+          Match ${+gi+1}: ${md.teams.nameA} <span style="color:rgba(255,255,255,0.4);">vs</span> ${md.teams.nameB}
+        </td>
+        ${h18.slice(0,9).map(h=>{const res=md.holeResults[h-1];return `<td style="text-align:center;padding:2px 1px;font-size:10px;font-weight:700;color:${res==='A'?'#70d490':res==='B'?'#f08080':res==='H'?'#aaa':'rgba(255,255,255,0.2)'};">${res||'·'}</td>`;}).join('')}
+        <td style="text-align:center;font-size:10px;font-weight:700;color:${statusColor(fLeadStr)};padding:2px;">${fLeadStr}</td>
+        ${h18.slice(9).map(h=>{const res=md.holeResults[h-1];return `<td style="text-align:center;padding:2px 1px;font-size:10px;font-weight:700;color:${res==='A'?'#70d490':res==='B'?'#f08080':res==='H'?'#aaa':'rgba(255,255,255,0.2)'};">${res||'·'}</td>`;}).join('')}
+        <td style="text-align:center;font-size:10px;font-weight:700;color:${statusColor(bLeadStr)};padding:2px;">${bLeadStr}</td>
+        <td></td>
+        <td style="padding:3px 4px;text-align:center;">${matchStatusBadge(statusNow)}</td>
+        ${r===1?'<td></td><td></td>':''}
+      </tr>`;
+    });
+  }
+
   html+=`</tbody></table></div>
-  <div style="padding:10px 14px;background:var(--cream);border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
+  <div style="padding:10px 14px;background:var(--parchment);border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
     ${course.name} · ${course.location} · Par ${fPar+bPar} · ${selTee} Tees: ${totYds} yds · Rating ${teeData.rating} / Slope ${teeData.slope}
   </div></div>`;
 
@@ -1566,6 +1890,313 @@ async function exportAllToSheets(){
   showToast('✓ All data exported to Google Sheets!');
 }
 
+// ===================== TEAM COMPETITION ENGINE =====================
+
+// Sync team_matches into pairingsData so scorecard/match engine works
+function syncTeamMatchesToPairings(){
+  [3,6].forEach(r=>{
+    const matches=teamMatches[r]||{};
+    if(!Object.keys(matches).length) return;
+    pairingsData[r]=[];
+    for(let m=1;m<=5;m++){
+      const match=matches[m];
+      if(!match) return;
+      // player_indices: find 0-based golfer indices for a1,a2,b1,b2
+      const idx=id=>golfers.findIndex(g=>g.id===id);
+      pairingsData[r].push({
+        round:r, group_num:m, tee_time:'',
+        player_indices:[idx(match.a1),idx(match.a2),idx(match.b1),idx(match.b2)]
+      });
+    }
+  });
+}
+
+// Calculate match result: 'A' win, 'B' win, 'H' halved, null=not complete
+function getMatchResult(r, matchNum){
+  const holeResults=calcMatchHoles(r, matchNum-1);
+  const played=holeResults.filter(h=>h!==null).length;
+  if(played<18) return null; // only count completed matches? No — use current status
+  const aWins=holeResults.filter(h=>h==='A').length;
+  const bWins=holeResults.filter(h=>h==='B').length;
+  if(aWins>bWins) return 'A';
+  if(bWins>aWins) return 'B';
+  return 'H';
+}
+
+// Get current match status (can be used mid-round too via concession concept)
+function getMatchCurrentStatus(r, matchNum){
+  const holeResults=calcMatchHoles(r, matchNum-1);
+  const played=holeResults.filter(h=>h!==null).length;
+  if(!played) return null;
+  const aWins=holeResults.filter(h=>h==='A').length;
+  const bWins=holeResults.filter(h=>h==='B').length;
+  const holesLeft=18-played;
+  // Determine if match is decided (someone can't be caught)
+  if(aWins-bWins>holesLeft) return {winner:'A', decided:true, aWins, bWins, played};
+  if(bWins-aWins>holesLeft) return {winner:'B', decided:true, aWins, bWins, played};
+  return {winner:null, decided:false, aWins, bWins, played};
+}
+
+// Calc team points for a round: returns {teamA: pts, teamB: pts, matches: [{result,aWins,bWins}]}
+function calcTeamRoundPoints(r){
+  const matches=teamMatches[r]||{};
+  let teamAPts=0, teamBPts=0;
+  const matchDetails=[];
+  for(let m=1;m<=5;m++){
+    if(!matches[m]){matchDetails.push(null);continue;}
+    const status=getMatchCurrentStatus(r,m);
+    if(!status){matchDetails.push({status:null,pts:{A:0,B:0}});continue;}
+    let aPts=0,bPts=0;
+    if(status.decided){
+      if(status.winner==='A'){aPts=1;}
+      else if(status.winner==='B'){bPts=1;}
+      else{aPts=0.5;bPts=0.5;}
+    } else if(status.played===18){
+      if(status.aWins>status.bWins){aPts=1;}
+      else if(status.bWins>status.aWins){bPts=1;}
+      else{aPts=0.5;bPts=0.5;}
+    }
+    // For live display show partial (who's winning)
+    teamAPts+=aPts; teamBPts+=bPts;
+    matchDetails.push({status,pts:{A:aPts,B:bPts},match:matches[m]});
+  }
+  return {teamAPts, teamBPts, matchDetails};
+}
+
+// ===================== TEAM CUP RENDERER =====================
+
+async function renderTeamCup(){
+  const div=document.getElementById('team-cup-content');
+  if(!div) return;
+
+  const hasTeams=Object.keys(teamPlayers).length>0;
+  const teamA=golfers.filter(g=>teamPlayers[g.id]==='A');
+  const teamB=golfers.filter(g=>teamPlayers[g.id]==='B');
+  const capA=golfers.find(g=>g.id===teamComp.team_a_captain_id);
+  const capB=golfers.find(g=>g.id===teamComp.team_b_captain_id);
+  const nameA=teamComp.team_a_name||'Team A';
+  const nameB=teamComp.team_b_name||'Team B';
+
+  const r3pts=calcTeamRoundPoints(3);
+  const r6pts=calcTeamRoundPoints(6);
+  const totalA=r3pts.teamAPts+r6pts.teamAPts;
+  const totalB=r3pts.teamBPts+r6pts.teamBPts;
+
+  let html='';
+
+  // ---- SCOREBOARD ----
+  html+=`<div class="card" style="margin-bottom:20px;overflow:hidden;">
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;">
+      <div style="background:#0a2e18;padding:20px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:13px;color:#70d490;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">Team A${capA?` · Capt: ${capA.name.split(' ')[0]}`:''}</div>
+        <div style="font-family:'Playfair Display',serif;font-size:48px;font-weight:900;color:#70d490;line-height:1;">${totalA % 1 === 0 ? totalA : totalA.toFixed(1)}</div>
+        <div style="font-size:10px;color:rgba(112,212,144,0.6);letter-spacing:2px;text-transform:uppercase;margin-top:4px;">${nameA}</div>
+      </div>
+      <div style="background:#0a1628;padding:20px;text-align:center;min-width:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+        <div style="font-family:'Playfair Display',serif;font-size:11px;color:var(--gold-light);letter-spacing:2px;text-transform:uppercase;">Points</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:1px;">of 10</div>
+        <div style="width:30px;height:1px;background:var(--gold);"></div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.3);">R3+R6</div>
+      </div>
+      <div style="background:#3a0a0a;padding:20px;text-align:center;">
+        <div style="font-family:'Playfair Display',serif;font-size:13px;color:#f08080;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px;">Team B${capB?` · Capt: ${capB.name.split(' ')[0]}`:''}</div>
+        <div style="font-family:'Playfair Display',serif;font-size:48px;font-weight:900;color:#f08080;line-height:1;">${totalB % 1 === 0 ? totalB : totalB.toFixed(1)}</div>
+        <div style="font-size:10px;color:rgba(240,128,128,0.6);letter-spacing:2px;text-transform:uppercase;margin-top:4px;">${nameB}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid rgba(255,255,255,0.1);">
+      <div style="background:#0a2218;padding:10px 20px;text-align:center;border-right:1px solid rgba(255,255,255,0.1);">
+        <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;">Round 3</div>
+        <div style="font-size:18px;font-weight:700;color:#70d490;margin-top:2px;">${r3pts.teamAPts%1===0?r3pts.teamAPts:r3pts.teamAPts.toFixed(1)} <span style="color:rgba(255,255,255,0.2);">·</span> <span style="color:#f08080;">${r3pts.teamBPts%1===0?r3pts.teamBPts:r3pts.teamBPts.toFixed(1)}</span></div>
+      </div>
+      <div style="background:#1a0a0a;padding:10px 20px;text-align:center;">
+        <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;">Round 6</div>
+        <div style="font-size:18px;font-weight:700;color:#70d490;margin-top:2px;">${r6pts.teamAPts%1===0?r6pts.teamAPts:r6pts.teamAPts.toFixed(1)} <span style="color:rgba(255,255,255,0.2);">·</span> <span style="color:#f08080;">${r6pts.teamBPts%1===0?r6pts.teamBPts:r6pts.teamBPts.toFixed(1)}</span></div>
+      </div>
+    </div>
+  </div>`;
+
+  // ---- MATCH RESULTS (R3 & R6) ----
+  [3,6].forEach(r=>{
+    const rpts=r===3?r3pts:r6pts;
+    const matches=teamMatches[r]||{};
+    html+=`<div class="card" style="margin-bottom:16px;">
+      <div class="card-header"><span>Round ${r} — ${RNAMES[r]}</span><span class="badge">${RVENUES[r]}</span></div>
+      <div style="overflow-x:auto;"><table class="data-table">
+        <thead><tr>
+          <th>#</th><th style="color:#0a5c36;">Team A Pair</th><th style="color:#8b1a1a;">Team B Pair</th>
+          <th>Status</th><th>Holes</th><th>Result</th>
+        </tr></thead><tbody>`;
+    for(let m=1;m<=5;m++){
+      const match=matches[m];
+      if(!match){
+        html+=`<tr><td>${m}</td><td colspan="5" style="color:var(--text-muted);font-style:italic;font-size:12px;">Match ${m} — lineup TBD</td></tr>`;
+        continue;
+      }
+      const a1=golfers.find(g=>g.id===match.a1);
+      const a2=golfers.find(g=>g.id===match.a2);
+      const b1=golfers.find(g=>g.id===match.b1);
+      const b2=golfers.find(g=>g.id===match.b2);
+      const status=getMatchCurrentStatus(r,m);
+      const holeResults=calcMatchHoles(r,m-1);
+      const played=holeResults.filter(h=>h!==null).length;
+      const aWins=holeResults.filter(h=>h==='A').length;
+      const bWins=holeResults.filter(h=>h==='B').length;
+      const diff=aWins-bWins;
+      const statusStr=diff===0?'ALL SQ':diff>0?`A ${diff}UP`:`B ${Math.abs(diff)}UP`;
+      const statusColor=diff===0?'#888':diff>0?'#0a5c36':'#8b1a1a';
+      const detail=rpts.matchDetails[m-1];
+      const pts=detail?.pts||{A:0,B:0};
+      const resultStr=pts.A===1?`<span style="color:#0a5c36;font-weight:700;">A wins (${a1?.name.split(' ')[0]} &amp; ${a2?.name.split(' ')[0]})</span>`:
+                      pts.B===1?`<span style="color:#8b1a1a;font-weight:700;">B wins (${b1?.name.split(' ')[0]} &amp; ${b2?.name.split(' ')[0]})</span>`:
+                      pts.A===0.5?`<span style="color:#888;font-weight:700;">Halved (½ each)</span>`:
+                      `<span style="color:var(--text-muted);">In progress</span>`;
+      html+=`<tr>
+        <td><strong>${m}</strong></td>
+        <td style="color:#0a5c36;font-weight:600;">${a1?.name.split(' ')[0]||'?'} &amp; ${a2?.name.split(' ')[0]||'?'}</td>
+        <td style="color:#8b1a1a;font-weight:600;">${b1?.name.split(' ')[0]||'?'} &amp; ${b2?.name.split(' ')[0]||'?'}</td>
+        <td><span style="font-weight:700;color:${statusColor};">${played?statusStr:'Not started'}</span></td>
+        <td style="font-size:12px;color:var(--text-muted);">${played}/18</td>
+        <td>${resultStr}</td>
+      </tr>`;
+    }
+    html+=`<tr style="background:var(--parchment);">
+      <td colspan="5" style="font-weight:700;">Round ${r} Total</td>
+      <td><span style="color:#0a5c36;font-weight:700;">${nameA}: ${rpts.teamAPts%1===0?rpts.teamAPts:rpts.teamAPts.toFixed(1)}</span> &nbsp;·&nbsp; <span style="color:#8b1a1a;font-weight:700;">${nameB}: ${rpts.teamBPts%1===0?rpts.teamBPts:rpts.teamBPts.toFixed(1)}</span></td>
+    </tr>`;
+    html+=`</tbody></table></div></div>`;
+  });
+
+  // ---- ROSTERS ----
+  html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+    <div class="card"><div class="card-header" style="background:#0a2e18;border-bottom:2px solid #70d490;">
+      <span style="color:#70d490;">${nameA} Roster</span>${capA?`<span class="badge" style="background:#70d490;color:#0a2e18;">Capt: ${capA.name}</span>`:''}
+    </div><div style="padding:0;">
+      ${teamA.length?teamA.map(g=>`<div style="padding:8px 16px;border-bottom:1px solid #eee;font-size:13px;display:flex;justify-content:space-between;">
+        <span style="${g.id===teamComp.team_a_captain_id?'font-weight:700;':''}">${g.id===teamComp.team_a_captain_id?'★ ':''  }${g.name}</span>
+        <span style="color:var(--text-muted);">HDCP ${g.hdcp}</span>
+      </div>`).join(''):'<div style="padding:16px;color:var(--text-muted);font-size:13px;font-style:italic;">Draft pending</div>'}
+    </div></div>
+    <div class="card"><div class="card-header" style="background:#3a0a0a;border-bottom:2px solid #f08080;">
+      <span style="color:#f08080;">${nameB} Roster</span>${capB?`<span class="badge" style="background:#f08080;color:#3a0a0a;">Capt: ${capB.name}</span>`:''}
+    </div><div style="padding:0;">
+      ${teamB.length?teamB.map(g=>`<div style="padding:8px 16px;border-bottom:1px solid #eee;font-size:13px;display:flex;justify-content:space-between;">
+        <span style="${g.id===teamComp.team_b_captain_id?'font-weight:700;':''}">${g.id===teamComp.team_b_captain_id?'★ ':''  }${g.name}</span>
+        <span style="color:var(--text-muted);">HDCP ${g.hdcp}</span>
+      </div>`).join(''):'<div style="padding:16px;color:var(--text-muted);font-size:13px;font-style:italic;">Draft pending</div>'}
+    </div></div>
+  </div>`;
+
+  // ---- ADMIN SETUP (admin only) ----
+  if(IS_ADMIN){
+    html+=`<div class="card admin-only"><div class="card-header" style="justify-content:space-between;">
+      <span>⚙️ Admin: Team Setup</span><span class="badge">Admin Only</span>
+    </div><div class="card-body">
+
+      <div style="margin-bottom:20px;">
+        <p style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Team Names &amp; Captains</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Team A Name</label>
+            <input type="text" id="tc-name-a" value="${nameA}" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;">
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-top:8px;margin-bottom:4px;">Team A Captain</label>
+            <select id="tc-cap-a" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;">
+              <option value="">Select captain...</option>
+              ${golfers.map(g=>`<option value="${g.id}" ${g.id===teamComp.team_a_captain_id?'selected':''}>${g.name}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Team B Name</label>
+            <input type="text" id="tc-name-b" value="${nameB}" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;">
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-top:8px;margin-bottom:4px;">Team B Captain</label>
+            <select id="tc-cap-b" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;">
+              <option value="">Select captain...</option>
+              ${golfers.map(g=>`<option value="${g.id}" ${g.id===teamComp.team_b_captain_id?'selected':''}>${g.name}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="margin-top:12px;" onclick="saveTeamSetup()">Save Team Names &amp; Captains</button>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <p style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Assign Players to Teams</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:12px;">
+          <div style="font-weight:700;color:var(--text-muted);padding:4px 0;">Golfer</div>
+          <div style="font-weight:700;color:#0a5c36;padding:4px 0;">Team A</div>
+          <div style="font-weight:700;color:#8b1a1a;padding:4px 0;">Team B</div>
+          ${golfers.map(g=>`
+            <div style="padding:4px 0;display:flex;align-items:center;">${g.name} <span style="color:var(--text-muted);font-size:11px;margin-left:4px;">(${g.hdcp})</span></div>
+            <div style="padding:2px 0;"><input type="radio" name="team_${g.id}" value="A" ${teamPlayers[g.id]==='A'?'checked':''} onchange="setPlayerTeam(${g.id},'A')"> Team A</div>
+            <div style="padding:2px 0;"><input type="radio" name="team_${g.id}" value="B" ${teamPlayers[g.id]==='B'?'checked':''} onchange="setPlayerTeam(${g.id},'B')"> Team B</div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div>
+        <p style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Match Lineups</p>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Set the 2-person pairings for each match in Rounds 3 &amp; 6. The captain who paid most in Calcutta puts out match 1 in R3 and match 2 in R6 (snake order).</p>
+        ${[3,6].map(r=>`
+        <div style="margin-bottom:16px;">
+          <p style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px;">Round ${r} — ${RNAMES[r]}</p>
+          <table class="data-table"><thead><tr><th>#</th><th style="color:#0a5c36;">Team A Player 1</th><th style="color:#0a5c36;">Team A Player 2</th><th style="color:#8b1a1a;">Team B Player 1</th><th style="color:#8b1a1a;">Team B Player 2</th></tr></thead><tbody>
+          ${[1,2,3,4,5].map(m=>{
+            const match=teamMatches[r]?.[m]||{};
+            const mkSel=(id,field)=>`<select onchange="setMatchPlayer(${r},${m},'${field}',+this.value)" style="border:1px solid var(--border);border-radius:2px;padding:4px 6px;font-size:12px;width:100%;">
+              <option value="0">Select...</option>
+              ${golfers.filter(g=>!field.startsWith('b')?teamPlayers[g.id]==='A':teamPlayers[g.id]==='B').map(g=>`<option value="${g.id}" ${g.id===match[field]?'selected':''}>${g.name} (${g.hdcp})</option>`).join('')}
+            </select>`;
+            return `<tr><td><strong>${m}</strong></td><td>${mkSel(match.a1,'a1')}</td><td>${mkSel(match.a2,'a2')}</td><td>${mkSel(match.b1,'b1')}</td><td>${mkSel(match.b2,'b2')}</td></tr>`;
+          }).join('')}
+          </tbody></table>
+          <button class="btn btn-gold btn-sm" style="margin-top:8px;" onclick="saveMatchLineup(${r})">💾 Save Round ${r} Lineups</button>
+        </div>`).join('')}
+      </div>
+    </div></div>`;
+  }
+
+  div.innerHTML=html;
+}
+
+// ---- Team admin save functions ----
+async function saveTeamSetup(){
+  const nameA=document.getElementById('tc-name-a')?.value||'Team A';
+  const nameB=document.getElementById('tc-name-b')?.value||'Team B';
+  const capA=parseInt(document.getElementById('tc-cap-a')?.value)||null;
+  const capB=parseInt(document.getElementById('tc-cap-b')?.value)||null;
+  const {data:existing}=await sb.from('team_competition').select('id').limit(1);
+  if(existing&&existing[0]){
+    await sb.from('team_competition').update({team_a_name:nameA,team_b_name:nameB,team_a_captain_id:capA,team_b_captain_id:capB}).eq('id',existing[0].id);
+  } else {
+    await sb.from('team_competition').insert({team_a_name:nameA,team_b_name:nameB,team_a_captain_id:capA,team_b_captain_id:capB});
+  }
+  teamComp={...teamComp,team_a_name:nameA,team_b_name:nameB,team_a_captain_id:capA,team_b_captain_id:capB};
+  showToast('Team setup saved!');
+  renderTeamCup();
+}
+
+async function setPlayerTeam(golferId, team){
+  await sb.from('team_players').upsert({golfer_id:golferId,team},{onConflict:'golfer_id'});
+  teamPlayers[golferId]=team;
+}
+
+function setMatchPlayer(r, matchNum, field, golferId){
+  if(!teamMatches[r]) teamMatches[r]={};
+  if(!teamMatches[r][matchNum]) teamMatches[r][matchNum]={a1:null,a2:null,b1:null,b2:null};
+  teamMatches[r][matchNum][field]=golferId||null;
+}
+
+async function saveMatchLineup(r){
+  const matches=teamMatches[r]||{};
+  for(let m=1;m<=5;m++){
+    const match=matches[m];
+    if(!match) continue;
+    await sb.from('team_matches').upsert({round:r,match_num:m,a1_golfer_id:match.a1||null,a2_golfer_id:match.a2||null,b1_golfer_id:match.b1||null,b2_golfer_id:match.b2||null},{onConflict:'round,match_num'});
+  }
+  syncTeamMatchesToPairings();
+  showToast(`Round ${r} lineups saved! Pairings updated.`);
+  renderTeamCup();
+}
+
 // ===================== UTILITIES =====================
 function holeColor(s,par){const d=s-par;return d<=-2?'eagle':d===-1?'birdie':d===0?'par':d===1?'bogey':'double';}
 function ini(n){return(n||'?').split(' ').map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';}
@@ -1580,6 +2211,7 @@ function showTab(t,btn){
   if(t==='leaderboard')renderLB();
   if(t==='shootout')renderShootout();
   if(t==='pairings')renderPairings(curPairR);
+  if(t==='team')renderTeamCup();
   if(t==='myscores')renderMyScores(curMyR);
   if(t==='golfers'){
     const desc=document.getElementById('golfers-desc');
