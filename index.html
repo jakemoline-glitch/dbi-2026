@@ -212,8 +212,8 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
 <nav class="nav-bar">
   <div class="nav-inner">
     <button class="nav-btn active" onclick="showTab('leaderboard',this)">🏆 Leaderboard</button>
-    <button class="nav-btn" onclick="showTab('myscores',this)">✏️ My Scores</button>
-    <button class="nav-btn" onclick="showTab('scorecard',this)">⛳ Scorecards</button>
+    <button class="nav-btn" onclick="showTab('myscores',this)">✏️ My Scorecard</button>
+    <button class="nav-btn" onclick="showTab('scorecard',this)">⛳ All Scorecards</button>
     <button class="nav-btn" onclick="showTab('pairings',this)">👥 Pairings</button>
     <button class="nav-btn" onclick="showTab('team',this)">⚔️ Team Cup</button>
     <button class="nav-btn" onclick="showTab('shootout',this)">🎯 Shootout</button>
@@ -236,10 +236,10 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
   </div>
 </div>
 
-<!-- MY SCORES -->
+<!-- MY SCORECARD -->
 <div id="tab-myscores" class="tab-content">
-  <div class="section-title">My Scores</div>
-  <p class="section-sub">Enter your scores hole by hole. They save automatically and appear live for everyone.</p>
+  <div class="section-title">My Scorecard</div>
+  <p class="section-sub">Your scores and your group's scores — enter for yourself and your foursome. Saves automatically.</p>
   <div class="round-tabs" id="my-rtabs">
     <button class="round-tab active" onclick="showMyRound(1,this)">Round 1</button>
     <button class="round-tab" onclick="showMyRound(2,this)">Round 2</button>
@@ -251,10 +251,10 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
   <div id="my-scores-content"></div>
 </div>
 
-<!-- SCORECARDS -->
+<!-- ALL SCORECARDS -->
 <div id="tab-scorecard" class="tab-content">
-  <div class="section-title">Live Scorecards</div>
-  <p class="section-sub"><span class="live-dot"></span>Live · All golfers' hole-by-hole scores</p>
+  <div class="section-title">All Scorecards</div>
+  <p class="section-sub"><span class="live-dot"></span>Live · All 20 golfers' hole-by-hole scores</p>
   <div class="round-tabs" id="sc-rtabs">
     <button class="round-tab active" onclick="showSCRound(1,this)">Round 1</button>
     <button class="round-tab" onclick="showSCRound(2,this)">Round 2</button>
@@ -740,115 +740,242 @@ function sfPtsColor(pts){
 }
 
 function renderMyScores(r){
-  const gid=ME.id,hdcp=parseFloat(ME.hdcp);
-  const sc=holeScores[r]?.[gid]||{};
   const course=ROUND_COURSE[r];
   const par=course.par;
-  const isR1=r===1;
-  const quota=38-hdcp;
-  let html=`<div class="format-box"><strong>Round ${r} @ ${course.name} — ${RNAMES[r]}</strong><br>
-    <span style="font-size:12px;">Your handicap: ${hdcp}${isR1?` · Stableford Quota: <strong>${quota}</strong> (Eagle=8, Birdie=4, Par=2, Bogey=1)`:''}</span></div>`;
-
-  html+=`<div class="score-panel"><div class="score-panel-hdr"><h3>${ME.name} — Round ${r}</h3><span class="my-tag">✏️ Your Card</span></div><div class="hole-grid">`;
-  const myGolferIdx=golfers.findIndex(g=>g.id===ME.id);
-  const hdcpPctMy=getHdcpPct(r,myGolferIdx);
-  const showStrokesMy=SHOW_STROKES_ROUNDS.includes(r);
-  for(let h=1;h<=18;h++){
-    const v=sc[h]||'';
-    const cl=v?holeColor(v,par[h-1]):'';
-    const sfPts=isR1?holeStablefordPts(v?+v:null,par[h-1]):null;
-    const strokes=showStrokesMy?getStrokes(hdcp,course.hdcp[h-1],hdcpPctMy):0;
-    html+=`<div class="hole-cell">
-      <div class="hole-lbl">H${h}<span style="display:block;font-size:8px;color:var(--text-muted);">P${par[h-1]}</span></div>
-      <div class="hi-wrap">
-        <input type="number" min="1" max="15" class="hi ${cl}" id="mh_${r}_${h}" value="${v}" placeholder="${par[h-1]}"
-          oninput="onHoleInput(this,${r},${h},${h-1},${r})" style="${strokes>0?'border-color:#b8965a;border-width:2px;':''}">
-        ${cornerDots(strokes)}
-      </div>
-      ${isR1?`<div style="font-size:10px;font-weight:700;min-width:28px;text-align:center;padding:1px 4px;border-radius:2px;${sfPtsColor(sfPts)}" id="sfh_${r}_${h}">${sfPts!==null?sfPts:'·'}</div>`:''}
-    </div>`;
-    if(h===9)html+=`<div class="hole-divider"></div>`;
-  }
-  html+=`</div>`;
-
-  const f=Object.entries(sc).filter(([h])=>+h<=9).reduce((a,[,s])=>a+s,0);
-  const b=Object.entries(sc).filter(([h])=>+h>9).reduce((a,[,s])=>a+s,0);
-  const tot=f+b;
-  const net=tot?tot-hdcp:0;
+  const hdcpIndex=course.hdcp;
+  const h18=Array.from({length:18},(_,i)=>i+1);
   const fPar=par.slice(0,9).reduce((a,b)=>a+b,0);
   const bPar=par.slice(9).reduce((a,b)=>a+b,0);
-  const toPar=tot?(tot-(fPar+bPar)):null;
+  const isR1=r===1;
+  const showStrokes=SHOW_STROKES_ROUNDS.includes(r);
+  const isMatchRound=MATCH_ROUNDS.includes(r);
 
-  let sfFront=0,sfBack=0,sfTotal=0;
-  if(isR1){
-    for(let h=1;h<=9;h++){const v=sc[h];if(v)sfFront+=holeStablefordPts(+v,par[h-1])||0;}
-    for(let h=10;h<=18;h++){const v=sc[h];if(v)sfBack+=holeStablefordPts(+v,par[h-1])||0;}
-    sfTotal=sfFront+sfBack;
+  // Find my group for this round
+  const myGolferIdx=golfers.findIndex(g=>g.id===ME.id);
+  const myGroup=getMyGroup(r);
+
+  // Build the list of golfers to show: me + my group partners
+  // If no group found, just show me
+  let groupIndices = myGroup ? myGroup.playerIndices : [myGolferIdx];
+  // Make sure I'm in the list and sort so I'm first
+  if(!groupIndices.includes(myGolferIdx)) groupIndices=[myGolferIdx,...groupIndices];
+  else {
+    groupIndices=[myGolferIdx,...groupIndices.filter(i=>i!==myGolferIdx)];
   }
-  const vsQuota=isR1&&sfTotal?(sfTotal-quota):null;
+  const groupGolfers=groupIndices.map(i=>golfers[i]).filter(Boolean);
 
-  html+=`<div class="totals-bar">
-    <div class="tot-item"><div class="tot-lbl">Front</div><div class="tot-val" id="tot-f-${r}">${f||'—'}</div></div>
-    <div class="tot-item"><div class="tot-lbl">Back</div><div class="tot-val" id="tot-b-${r}">${b||'—'}</div></div>
-    <div class="tot-item"><div class="tot-lbl">Gross</div><div class="tot-val" id="tot-g-${r}">${tot||'—'}</div></div>
-    <div class="tot-item"><div class="tot-lbl">+/- Par</div><div class="tot-val" id="tot-p-${r}" style="color:${toPar===0?'var(--navy)':toPar>0?'var(--red)':'#0a5c36'}">${toPar!==null?(toPar>0?'+':'')+toPar:'—'}</div></div>
-    <div class="tot-item"><div class="tot-lbl">Net</div><div class="tot-val" id="tot-n-${r}">${tot?Math.round(net):'—'}</div></div>
-    ${isR1?`
-    <div class="tot-item" style="border:2px solid var(--gold);"><div class="tot-lbl">SF Pts</div><div class="tot-val" id="tot-sf-${r}" style="color:var(--navy);">${sfTotal||'—'}</div></div>
-    <div class="tot-item" style="border:2px solid var(--navy);background:var(--navy);"><div class="tot-lbl" style="color:var(--gold-light);">vs Quota</div><div class="tot-val" id="tot-vq-${r}" style="color:${vsQuota>0?'#70d490':vsQuota<0?'#f08080':'var(--gold-light)'};">${vsQuota!==null?(vsQuota>0?'+':'')+vsQuota:'—'}</div></div>`:''}
+  // Match play pre-computation
+  let matchGroupIdx=-1, myTeam=null, matchData=null;
+  if(isMatchRound && myGroup){
+    const grps=pairingsData[r]||[];
+    grps.forEach((grp,gi)=>{
+      const pi=grp.player_indices||[];
+      if(pi.includes(myGolferIdx)){
+        matchGroupIdx=gi;
+        myTeam=pi.slice(0,2).includes(myGolferIdx)?'A':'B';
+      }
+    });
+    if(matchGroupIdx>=0){
+      try{
+        const teams=getMatchTeams(r,matchGroupIdx);
+        if(teams){
+          const holeResults=calcMatchHoles(r,matchGroupIdx);
+          const runningStatus=calcRunningStatus(holeResults);
+          const nassau=calcNassau(holeResults);
+          matchData={teams,holeResults,runningStatus,nassau};
+        }
+      }catch(e){console.warn('match data error',e);}
+    }
+  }
+
+  // Tee info
+  const storedTee=localStorage.getItem(`dbi26_tee_r${r}`)||course.defaultTee;
+  const selTee=Object.keys(course.tees).includes(storedTee)?storedTee:course.defaultTee;
+  const teeData=course.tees[selTee];
+
+  let html=`<div class="format-box">
+    <strong>Round ${r} @ ${course.name} — ${RNAMES[r]}</strong><br>
+    <span style="font-size:12px;">${selTee} Tees · ${teeData.yards.reduce((a,b)=>a+b,0)} yds · Rating ${teeData.rating} / Slope ${teeData.slope}
+    ${isR1?` · Your Quota: <strong>${38-parseFloat(ME.hdcp)}</strong> (Eagle=8, Birdie=4, Par=2, Bogey=1)`:''}</span>
+  </div>`;
+
+  // Tee selector
+  const teeBtns=Object.keys(course.tees).map(t=>{
+    const td=course.tees[t]; const active=t===selTee;
+    return `<button onclick="switchTee(${r},'${t}')" style="padding:4px 10px;border-radius:2px;border:2px solid ${active?td.color:'var(--border)'};background:${active?td.color:'var(--white)'};color:${active?'#fff':'var(--text)'};font-family:'Inter',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">${t}</button>`;
+  }).join('');
+  html+=`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;">${teeBtns}</div>`;
+
+  if(showStrokes){
+    html+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:11px;color:rgba(255,255,255,0.5);">
+      <span style="color:#b8965a;font-size:13px;">●</span> = 1 stroke &nbsp;
+      <span style="color:#b8965a;font-size:13px;">●●</span> = 2 strokes
+    </div>`;
+  }
+
+  // Build scorecard table for the group
+  html+=`<div class="card"><div class="card-header">
+    <span>Round ${r} · ${myGroup?'Your Group':'Your Card'}</span>
+    <span class="badge">${course.name}</span>
+  </div>
+  <div class="scorecard-wrap"><table class="sc"><thead>
+    <tr>
+      <th class="nc">Golfer</th><th>HCP</th>
+      ${par.slice(0,9).map((_,i)=>`<th>${i+1}</th>`).join('')}
+      <th>OUT</th>
+      ${par.slice(9).map((_,i)=>`<th>${i+10}</th>`).join('')}
+      <th>IN</th><th>TOT</th><th>NET</th>
+      ${isR1?'<th style="background:#b8965a;color:#0a1628;">SF</th><th style="background:#b8965a;color:#0a1628;">vs Q</th>':''}
+      ${isMatchRound&&matchData?'<th style="background:#152340;color:#b8965a;min-width:60px;">STATUS</th>':''}
+    </tr>
+    <tr class="par-row">
+      <td class="nc" style="font-weight:700;color:var(--navy);">Par</td><td></td>
+      ${par.slice(0,9).map(p=>`<td>${p}</td>`).join('')}<td class="tot-cell">${fPar}</td>
+      ${par.slice(9).map(p=>`<td>${p}</td>`).join('')}<td class="tot-cell">${bPar}</td>
+      <td class="tot-cell">${fPar+bPar}</td><td></td>
+      ${isR1?'<td class="tot-cell"></td><td class="tot-cell"></td>':''}
+      ${isMatchRound&&matchData?'<td class="tot-cell"></td>':''}
+    </tr>
+    <tr class="par-row">
+      <td class="nc" style="color:${course.tees[selTee].color};font-weight:700;">${selTee} Tees</td><td></td>
+      ${teeData.yards.slice(0,9).map(y=>`<td style="font-size:10px;">${y}</td>`).join('')}
+      <td class="tot-cell" style="font-size:10px;">${teeData.yards.slice(0,9).reduce((a,b)=>a+b,0)}</td>
+      ${teeData.yards.slice(9).map(y=>`<td style="font-size:10px;">${y}</td>`).join('')}
+      <td class="tot-cell" style="font-size:10px;">${teeData.yards.slice(9).reduce((a,b)=>a+b,0)}</td>
+      <td class="tot-cell" style="font-size:10px;">${teeData.yards.reduce((a,b)=>a+b,0)}</td><td></td>
+      ${isR1?'<td></td><td></td>':''}
+      ${isMatchRound&&matchData?'<td></td>':''}
+    </tr>
+    <tr class="par-row">
+      <td class="nc" style="color:var(--text-muted);">HCP Index</td><td></td>
+      ${hdcpIndex.slice(0,9).map(h=>`<td style="font-size:10px;color:var(--text-muted);">${h}</td>`).join('')}
+      <td class="tot-cell"></td>
+      ${hdcpIndex.slice(9).map(h=>`<td style="font-size:10px;color:var(--text-muted);">${h}</td>`).join('')}
+      <td class="tot-cell"></td><td class="tot-cell"></td><td></td>
+      ${isR1?'<td></td><td></td>':''}
+      ${isMatchRound&&matchData?'<td></td>':''}
+    </tr>
+  </thead><tbody>`;
+
+  groupGolfers.forEach((g,gPos)=>{
+    const gi=golfers.findIndex(x=>x.id===g.id);
+    const sc=holeScores[r]?.[g.id]||{};
+    const isMe=g.id===ME.id;
+    const canEdit=canEditScore(gi,r);
+    const hdcpPct=getHdcpPct(r,gi);
+    const adjHdcp=Math.round(parseFloat(g.hdcp)*hdcpPct);
+    const f=h18.slice(0,9).reduce((a,h)=>a+(sc[h]||0),0);
+    const bk=h18.slice(9).reduce((a,h)=>a+(sc[h]||0),0);
+    const tot=f+bk;
+    const net=tot?tot-adjHdcp:'';
+
+    // Team label for match rounds
+    let gTeam=null;
+    if(isMatchRound&&matchData){
+      if(matchData.teams.teamA.find(p=>p.idx===gi)) gTeam='A';
+      if(matchData.teams.teamB.find(p=>p.idx===gi)) gTeam='B';
+    }
+    const teamLabel=gTeam?` <span style="font-size:9px;font-weight:700;padding:1px 4px;border-radius:2px;background:${gTeam==='A'?'#0a2e18':'#3a0a0a'};color:${gTeam==='A'?'#70d490':'#f08080'};">T${gTeam}</span>`:'';
+    const hdcpDisplay=hdcpPct===1.0?`${g.hdcp}`:`${g.hdcp}<span style="font-size:9px;color:var(--text-muted);display:block;">${Math.round(hdcpPct*100)}%→${adjHdcp}</span>`;
+    const rowStyle=isMe?'me-row':canEdit?'can-edit-row':'';
+
+    // Cell builder
+    const mkCell=(h,v,cl,strokes,editable)=>{
+      const bStyle=strokes>0?'border-color:#b8965a;border-width:2px;':'';
+      if(editable) return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="onHoleInputForGolfer(this,${r},${h},${h-1},${g.id})" style="${bStyle}"></div></td>`;
+      return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1" style="${bStyle}"></div></td>`;
+    };
+
+    html+=`<tr class="${rowStyle}">
+      <td class="nc">${g.name}${isMe?' ★':''}${teamLabel}</td>
+      <td style="font-size:12px;">${hdcpDisplay}</td>`;
+
+    h18.slice(0,9).forEach(h=>{
+      const v=sc[h]||''; const cl=v?holeColor(v,par[h-1]):'';
+      const strokes=showStrokes?getStrokes(g.hdcp,hdcpIndex[h-1],hdcpPct):0;
+      html+=mkCell(h,v,cl,strokes,canEdit);
+    });
+    html+=`<td class="tot-cell">${f||'—'}</td>`;
+    h18.slice(9).forEach(h=>{
+      const v=sc[h]||''; const cl=v?holeColor(v,par[h-1]):'';
+      const strokes=showStrokes?getStrokes(g.hdcp,hdcpIndex[h-1],hdcpPct):0;
+      html+=mkCell(h,v,cl,strokes,canEdit);
+    });
+
+    // Stableford for R1
+    let sfTot=0;
+    if(isR1){ h18.forEach(h=>{const v=sc[h];if(v)sfTot+=holeStablefordPts(+v,par[h-1])||0;}); }
+    const quota=38-parseFloat(g.hdcp);
+    const vsQ=isR1&&sfTot?(sfTot-quota):null;
+
+    // Match status
+    const latestStatus=isMatchRound&&matchData?(matchData.runningStatus.filter(s=>s!==null).slice(-1)[0]||null):null;
+
+    html+=`<td class="tot-cell">${tot||'—'}</td>
+      <td class="tot-cell">${net?Math.round(net):'—'}</td>
+      ${isR1?`<td class="tot-cell" style="background:#f0e8d0;font-weight:700;color:var(--navy);">${sfTot||'—'}</td>
+      <td class="tot-cell" style="${vsQ>0?'background:#0a2e18;color:#70d490;':vsQ<0?'background:#3a0a0a;color:#f08080;':'background:#1a2e50;color:#b8d0f8;'}font-weight:700;">${vsQ!==null?(vsQ>0?'+':'')+vsQ:'—'}</td>`:''}
+      ${isMatchRound&&matchData&&isMe?`<td class="tot-cell" style="background:#0e1e38;padding:3px 4px;">${latestStatus?matchStatusBadge(latestStatus):'<span style="font-size:9px;color:rgba(255,255,255,0.3);">—</span>'}</td>`:''}
+      ${isMatchRound&&matchData&&!isMe?`<td class="tot-cell" style="background:#0e1e38;"></td>`:''}
+    </tr>`;
+
+    // Result row for match play
+    if(isMatchRound&&matchData&&gTeam){
+      html+=`<tr style="background:#f8f4ec;">
+        <td class="nc" style="font-size:10px;color:var(--text-muted);font-style:italic;">vs T${gTeam==='A'?'B':'A'}</td><td></td>
+        ${h18.slice(0,9).map(h=>`<td style="text-align:center;padding:2px;">${holeResultChip(matchData.holeResults[h-1],gTeam)}</td>`).join('')}
+        <td class="tot-cell" style="font-size:10px;">${(()=>{const f9=matchData.holeResults.slice(0,9).filter(x=>x!==null);const aW=f9.filter(x=>x==='A').length,bW=f9.filter(x=>x==='B').length;const diff=gTeam==='A'?aW-bW:bW-aW;return f9.length?`<span style="font-weight:700;color:${diff>0?'#0a2e18':diff<0?'#3a0a0a':'#444'}">${diff>0?`+${diff}`:diff}</span>`:'—';})()} </td>
+        ${h18.slice(9).map(h=>`<td style="text-align:center;padding:2px;">${holeResultChip(matchData.holeResults[h-1],gTeam)}</td>`).join('')}
+        <td class="tot-cell" style="font-size:10px;">${(()=>{const b9=matchData.holeResults.slice(9).filter(x=>x!==null);const aW=b9.filter(x=>x==='A').length,bW=b9.filter(x=>x==='B').length;const diff=gTeam==='A'?aW-bW:bW-aW;return b9.length?`<span style="font-weight:700;color:${diff>0?'#0a2e18':diff<0?'#3a0a0a':'#444'}">${diff>0?`+${diff}`:diff}</span>`:'—';})()} </td>
+        <td></td><td></td>
+        ${isR1?'<td></td><td></td>':''}
+        ${isMatchRound&&matchData?`<td class="tot-cell" style="background:#0e1e38;padding:3px 4px;">${matchStatusBadge(latestStatus)}</td>`:''}
+      </tr>`;
+    }
+  });
+
+  html+=`</tbody></table></div>
+  <div style="padding:10px 14px;background:var(--parchment);border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
+    ${course.name} · ${course.location} · Par ${fPar+bPar} · ${selTee} Tees: ${teeData.yards.reduce((a,b)=>a+b,0)} yds · Rating ${teeData.rating} / Slope ${teeData.slope}
+    ${myGroup?'':'<span style="margin-left:8px;color:var(--gold);">⚠ No group assigned for this round yet</span>'}
   </div></div>`;
 
-  const rr=roundResults[r]?.[gid];
-  if(rr)html+=`<div class="card"><div class="card-body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+  // Totals for MY row only
+  const mySc=holeScores[r]?.[ME.id]||{};
+  const myF=Object.entries(mySc).filter(([h])=>+h<=9).reduce((a,[,s])=>a+s,0);
+  const myB=Object.entries(mySc).filter(([h])=>+h>9).reduce((a,[,s])=>a+s,0);
+  const myTot=myF+myB; const myNet=myTot?myTot-parseFloat(ME.hdcp):0;
+  const myToPar=myTot?(myTot-(fPar+bPar)):null;
+  let sfFront=0,sfBack=0,sfTotal=0;
+  if(isR1){
+    for(let h=1;h<=9;h++){const v=mySc[h];if(v)sfFront+=holeStablefordPts(+v,par[h-1])||0;}
+    for(let h=10;h<=18;h++){const v=mySc[h];if(v)sfBack+=holeStablefordPts(+v,par[h-1])||0;}
+    sfTotal=sfFront+sfBack;
+  }
+  const myQuota=38-parseFloat(ME.hdcp);
+  const vsQuota=isR1&&sfTotal?(sfTotal-myQuota):null;
+
+  html+=`<div style="margin-top:12px;">
+    <div style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Your Totals</div>
+    <div class="totals-bar" style="background:transparent;padding:0;">
+      <div class="tot-item"><div class="tot-lbl">Front</div><div class="tot-val" id="tot-f-${r}">${myF||'—'}</div></div>
+      <div class="tot-item"><div class="tot-lbl">Back</div><div class="tot-val" id="tot-b-${r}">${myB||'—'}</div></div>
+      <div class="tot-item"><div class="tot-lbl">Gross</div><div class="tot-val" id="tot-g-${r}">${myTot||'—'}</div></div>
+      <div class="tot-item"><div class="tot-lbl">+/- Par</div><div class="tot-val" id="tot-p-${r}" style="color:${myToPar===0?'var(--navy)':myToPar>0?'var(--red)':'#0a5c36'}">${myToPar!==null?(myToPar>0?'+':'')+myToPar:'—'}</div></div>
+      <div class="tot-item"><div class="tot-lbl">Net</div><div class="tot-val" id="tot-n-${r}">${myTot?Math.round(myNet):'—'}</div></div>
+      ${isR1?`
+      <div class="tot-item" style="border:2px solid var(--gold);"><div class="tot-lbl">SF Pts</div><div class="tot-val" id="tot-sf-${r}" style="color:var(--navy);">${sfTotal||'—'}</div></div>
+      <div class="tot-item" style="border:2px solid var(--navy);background:var(--navy);"><div class="tot-lbl" style="color:var(--gold-light);">vs Quota</div><div class="tot-val" id="tot-vq-${r}" style="color:${vsQuota>0?'#70d490':vsQuota<0?'#f08080':'var(--gold-light)'};">${vsQuota!==null?(vsQuota>0?'+':'')+vsQuota:'—'}</div></div>`:''}
+    </div>
+  </div>`;
+
+  // DBI Points
+  const rr=roundResults[r]?.[ME.id];
+  if(rr)html+=`<div class="card" style="margin-top:12px;"><div class="card-body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
     <span style="font-size:14px;font-weight:600;">Round ${r} DBI Points:</span>
     <span class="pts-chip" style="font-size:18px;padding:4px 14px;">${rr.dbi_points}</span>
     ${rr.place?`<span style="font-size:13px;color:var(--text-muted);">Finished ${rr.place}${ord(rr.place)}</span>`:''}
   </div></div>`;
-
-  // Match play summary card for R3 and R6
-  if(MATCH_ROUNDS.includes(r)){
-    const myIdx=golfers.findIndex(g=>g.id===ME.id);
-    let myGroupIdx=-1, myTeam=null;
-    const grps=pairingsData[r]||[];
-    grps.forEach((grp,gi)=>{
-      const pi=grp.player_indices||[];
-      if(pi.slice(0,2).includes(myIdx)){myGroupIdx=gi;myTeam='A';}
-      if(pi.slice(2,4).includes(myIdx)){myGroupIdx=gi;myTeam='B';}
-    });
-    if(myGroupIdx>=0){
-      const teams=getMatchTeams(r,myGroupIdx);
-      const holeResults=calcMatchHoles(r,myGroupIdx);
-      const runningStatus=calcRunningStatus(holeResults);
-      const nassau=calcNassau(holeResults);
-      const latestStatus=runningStatus.filter(s=>s!==null).slice(-1)[0]||null;
-      const oppTeam=myTeam==='A'?'B':'A';
-      const myName=myTeam==='A'?teams.nameA:teams.nameB;
-      const oppName=myTeam==='A'?teams.nameB:teams.nameA;
-
-      html+=`<div class="card"><div class="card-header" style="background:#0a1628;border-bottom:2px solid var(--gold);">
-        <span>Match Play · ${myName} <span style="color:rgba(255,255,255,0.4);">vs</span> ${oppName}</span>
-        <span style="margin-left:auto;">${latestStatus?matchStatusBadge(latestStatus):'<span style="font-size:11px;color:rgba(255,255,255,0.4);">Not started</span>'}</span>
-      </div>
-      <div class="card-body" style="padding:12px 16px;">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
-          ${holeResults.map((res,i)=>{
-            const chip=res?holeResultChip(res,myTeam):`<span style="font-size:9px;color:var(--text-light);background:var(--parchment);border-radius:2px;padding:1px 4px;">H${i+1}</span>`;
-            const status=runningStatus[i];
-            return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
-              ${chip}
-              ${status?`<span style="font-size:8px;font-weight:700;color:${status==='AS'?'#888':status.startsWith(myTeam)?'#0a5c36':'#8b1a1a'};">${status==='AS'?'SQ':status.replace('UP','')}</span>`:''}
-            </div>`;
-          }).join('')}
-        </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <div class="tot-item"><div class="tot-lbl">Front 9</div><div class="tot-val" style="font-size:14px;${(()=>{const d=myTeam==='A'?nassau.frontLead:-nassau.frontLead;return d>0?'color:#0a5c36;':d<0?'color:#8b1a1a;':'';})()} ">${nassau.frontPlayed?matchStatusBadge(nassau.frontLead===0?'AS':nassau.frontLead>0?`A${nassau.frontLead}UP`:`B${Math.abs(nassau.frontLead)}UP`):'—'}</div></div>
-          <div class="tot-item"><div class="tot-lbl">Back 9</div><div class="tot-val" style="font-size:14px;">${nassau.backPlayed?matchStatusBadge(nassau.backLead===0?'AS':nassau.backLead>0?`A${nassau.backLead}UP`:`B${Math.abs(nassau.backLead)}UP`):'—'}</div></div>
-          <div class="tot-item" style="border:2px solid var(--navy);"><div class="tot-lbl">Overall</div><div class="tot-val" style="font-size:14px;">${latestStatus?matchStatusBadge(latestStatus):'—'}</div></div>
-        </div>
-        <p style="font-size:11px;color:var(--text-muted);margin-top:8px;">Nassau: each 9 and overall are separate bets — 3 pts each + 3 pt winning team bonus.</p>
-      </div></div>`;
-    }
-  }
 
   document.getElementById('my-scores-content').innerHTML=html;
 }
