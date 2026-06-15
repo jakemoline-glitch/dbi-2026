@@ -881,9 +881,8 @@ function renderMyScores(r){
 
     // Cell builder
     const mkCell=(h,v,cl,strokes,editable)=>{
-      const bStyle=strokes>0?'border-color:#b8965a;border-width:2px;':'';
-      if(editable) return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="onHoleInputForGolfer(this,${r},${h},${h-1},${g.id})" style="${bStyle}"></div></td>`;
-      return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1" style="${bStyle}"></div></td>`;
+      if(editable) return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="onHoleInputForGolfer(this,${r},${h},${h-1},${g.id})"></div></td>`;
+      return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></div></td>`;
     };
 
     html+=`<tr class="${rowStyle}">
@@ -1309,7 +1308,47 @@ function _renderSC(r,div){
     });
   }
 
-  golfers.forEach((g,gi)=>{
+  // Build group-sorted golfer list: group 1 players, then group 2, etc.
+  // Golfers not in any group go at the end
+  const grpsForSort=pairingsData[r]||[];
+  const sortedGolferIndices=[];
+  const addedIndices=new Set();
+  grpsForSort.forEach((grp,gi)=>{
+    const pi=grp.player_indices||[];
+    // Add group divider marker
+    sortedGolferIndices.push({type:'group', groupNum:gi+1, teeTime:grp.tee_time||''});
+    pi.forEach(idx=>{
+      if(idx>=0&&idx<golfers.length&&!addedIndices.has(idx)){
+        sortedGolferIndices.push({type:'golfer', golferIdx:idx});
+        addedIndices.add(idx);
+      }
+    });
+  });
+  // Add any golfers not in a group
+  golfers.forEach((_,idx)=>{
+    if(!addedIndices.has(idx)) sortedGolferIndices.push({type:'golfer',golferIdx:idx});
+  });
+
+  sortedGolferIndices.forEach(item=>{
+    // Group header row
+    if(item.type==='group'){
+      const isMatch=MATCH_ROUNDS.includes(r);
+      const grp=grpsForSort[item.groupNum-1];
+      const pi=grp?.player_indices||[];
+      const names=pi.map(i=>golfers[i]?.name?.split(' ')[0]||'?').join(' · ');
+      html+=`<tr style="background:var(--navy);">
+        <td class="nc" colspan="2" style="padding:6px 10px;font-family:'Inter',sans-serif;font-size:10px;font-weight:700;color:var(--gold-light);letter-spacing:1px;text-transform:uppercase;">
+          ${isMatch?`Match ${item.groupNum}`:`Group ${item.groupNum}`}${item.teeTime?` <span style="color:rgba(255,255,255,0.4);font-weight:400;">· ${item.teeTime}</span>`:''}
+          <span style="color:rgba(255,255,255,0.3);font-weight:400;margin-left:8px;">${names}</span>
+        </td>
+        ${Array(20).fill('<td style="background:var(--navy);border:none;"></td>').join('')}
+      </tr>`;
+      return;
+    }
+
+    const gi=item.golferIdx;
+    const g=golfers[gi];
+    if(!g) return;
     const sc=holeScores[r]?.[g.id]||{};
     const isMe=g.id===ME?.id;
     const canEdit=canEditScore(gi,r);
@@ -1347,11 +1386,10 @@ function _renderSC(r,div){
 
     // Helper to build a scorecard cell with corner stroke dots
     const mkCell=(h,v,cl,strokes,editable)=>{
-      const bStyle=strokes>0?'border-color:#b8965a;border-width:2px;':'';
       if(editable){
-        return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="onHoleInputForGolfer(this,${r},${h},${h-1},${g.id})" style="${bStyle}"></div></td>`;
+        return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="onHoleInputForGolfer(this,${r},${h},${h-1},${g.id})"></div></td>`;
       }
-      return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1" style="${bStyle}"></div></td>`;
+      return `<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></div></td>`;
     };
 
     h18.slice(0,9).forEach(h=>{
