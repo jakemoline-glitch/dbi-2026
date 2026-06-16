@@ -1606,6 +1606,39 @@ async function saveGolfers(){
   showToast('Golfer info updated for everyone! ✓');
 }
 
+async function resetAllScores(){
+  if(!confirm('⚠️ This will permanently delete ALL hole scores, round results, and shootout data for all 20 golfers. This cannot be undone. Are you sure?')) return;
+  if(!confirm('Last chance — are you absolutely sure you want to wipe all scores?')) return;
+  showToast('Wiping all scores...');
+  await Promise.all([
+    sb.from('hole_scores').delete().neq('id',0),
+    sb.from('round_results').delete().neq('id',0),
+    sb.from('team_results').delete().neq('id',0),
+    sb.from('shootout').delete().neq('id',0),
+  ]);
+  holeScores={};roundResults={};shootoutSt={};
+  renderLB();renderShootout();
+  if(document.getElementById('tab-scorecard').classList.contains('active'))renderSC(curSCR);
+  if(document.getElementById('tab-myscores').classList.contains('active'))renderMyScores(curMyR);
+  showToast('✓ All scores wiped clean!');
+}
+
+async function resetRoundScores(r){
+  if(!confirm(`⚠️ This will delete all hole scores and results for Round ${r} only. Continue?`)) return;
+  showToast(`Wiping Round ${r} scores...`);
+  await Promise.all([
+    sb.from('hole_scores').delete().eq('round',r),
+    sb.from('round_results').delete().eq('round',r),
+  ]);
+  if(holeScores[r]) delete holeScores[r];
+  if(roundResults[r]) delete roundResults[r];
+  renderLB();
+  if(document.getElementById('tab-scorecard').classList.contains('active'))renderSC(curSCR);
+  if(document.getElementById('tab-myscores').classList.contains('active'))renderMyScores(curMyR);
+  showToast(`✓ Round ${r} scores cleared!`);
+  renderScoringAdmin();
+}
+
 // ===================== POINTS ENGINE =====================
 
 // Helper: get a golfer's gross total for a round from hole_scores
@@ -1828,16 +1861,38 @@ async function calcRound6(){
 // ---- SCORING ADMIN PANEL ----
 function renderScoringAdmin(){
   const div=document.getElementById('tab-admin');
-  const grpNames=r=>pairingsData[r]?.map((g,gi)=>{
-    const pi=g.player_indices||[];
-    return pi.map(idx=>golfers[idx]?.name?.split(' ')[0]||'?').join(' / ');
-  })||[];
+  if(!div) return;
 
   let html=`
   <div class="section-title">Score Admin</div>
-  <p class="section-sub">Finalize each round to generate DBI points. Round 1 &amp; 5 auto-calculate from hole scores. Team rounds need manual input below.</p>
+  <p class="section-sub">Finalize each round to generate DBI points. Admin only.</p>
 
-  <!-- R1 -->
+  <!-- RESET PANEL -->
+  <div class="card" style="border:2px solid var(--red);margin-bottom:20px;">
+    <div class="card-header" style="background:var(--red);border-bottom:2px solid #6b0000;">
+      <span>🗑️ Reset / Clear Scores</span><span class="badge" style="background:#6b0000;color:#ffaaaa;">Danger Zone</span>
+    </div>
+    <div class="card-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Use these to wipe test scores before the real tournament. All actions require double confirmation and cannot be undone.</p>
+      <div class="flex-gap" style="margin-bottom:12px;">
+        <button class="btn btn-sm" onclick="resetAllScores()" style="background:#8b1a1a;color:#fff;border:none;padding:8px 18px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">
+          ⚠️ Wipe ALL Scores (All Rounds)
+        </button>
+      </div>
+      <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Or clear individual rounds:</p>
+      <div class="flex-gap">
+        ${[1,2,3,4,5,6].map(r=>`<button class="btn btn-sm" onclick="resetRoundScores(${r})" style="background:var(--parchment);color:#8b1a1a;border:1px solid #f1aeb5;padding:6px 12px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Clear R${r}</button>`).join('')}
+      </div>
+    </div>
+  </div>`;
+
+  // grpNames helper
+  const grpNames=r=>( pairingsData[r]?.map((g)=>{
+    const pi=g.player_indices||[];
+    return pi.map(idx=>golfers[idx]?.name?.split(' ')[0]||'?').join(' / ');
+  })||[] );
+
+  html+=`<!-- R1 -->
   <div class="card"><div class="card-header" style="justify-content:space-between;">
     <span>Round 1 — Modified Stableford</span>
     <button class="btn btn-gold btn-sm" onclick="runCalc(1)">⚡ Calculate &amp; Save Points</button>
