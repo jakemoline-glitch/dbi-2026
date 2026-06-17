@@ -46,9 +46,8 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
 .user-pill span{font-family:'Inter',sans-serif;font-size:11px;color:var(--gold-light);letter-spacing:1px;font-weight:500;}
 .user-pill:hover{background:rgba(255,255,255,0.1);}
 .nav-bar{background:var(--navy-mid);border-bottom:2px solid var(--gold);position:sticky;top:0;z-index:100;}
-.nav-inner{max-width:1200px;margin:0 auto;display:flex;overflow-x:auto;scrollbar-width:none;}
-.nav-inner::-webkit-scrollbar{display:none;}
-.nav-btn{font-family:'Inter',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.5);background:none;border:none;cursor:pointer;padding:13px 15px;border-bottom:3px solid transparent;white-space:nowrap;transition:color 0.2s,border-color 0.2s;}
+.nav-inner{max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;}
+.nav-btn{font-family:'Inter',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.5);background:none;border:none;cursor:pointer;padding:11px 13px;border-bottom:3px solid transparent;white-space:nowrap;transition:color 0.2s,border-color 0.2s;}
 .nav-btn:hover{color:rgba(255,255,255,0.85);}
 .nav-btn.active{color:var(--gold-light);border-bottom-color:var(--gold);}
 .page-wrap{max-width:1200px;margin:0 auto;padding:28px 24px 60px;}
@@ -2195,7 +2194,7 @@ function renderScoringAdmin(){
     <button class="btn btn-gold btn-sm" onclick="runCalc(2)">⚡ Calculate &amp; Save Points</button>
   </div><div class="card-body">
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Team gross scores are pulled automatically from the scorecards tab. You can also enter manually here as a fallback.</p>
-    <table class="data-table"><thead><tr><th>Group</th><th>Players</th><th>From Scorecard</th><th>Manual Override</th></tr></thead><tbody>
+    <table class="data-table"><thead><tr><th>Group</th><th>Players</th><th>From Scorecard</th><th>Manual Override</th><th>Place</th><th>DBI Pts</th></tr></thead><tbody>
     ${(pairingsData[2]||Array(5).fill(null)).slice(0,5).map((g,gi)=>{
       const names=g?(g.player_indices||[]).map(idx=>golfers[idx]?.name?.split(' ')[0]||'?').join(', '):`Group ${gi+1}`;
       const existing=roundResults[2]?.[golfers[g?.player_indices?.[0]]?.id];
@@ -2205,7 +2204,9 @@ function renderScoringAdmin(){
         <td style="font-weight:700;color:${autoGross?'var(--navy)':'var(--text-muted)'};">${autoGross||'<span style="font-size:11px;font-style:italic;">No scorecard data</span>'}</td>
         <td><input type="number" id="r2gross_${gi}" placeholder="e.g. 62" min="50" max="120"
           value="${existing?.gross_score||autoGross||''}"
-          style="border:1px solid var(--border);border-radius:2px;padding:5px 8px;font-size:14px;font-weight:700;width:90px;"></td></tr>`;
+          style="border:1px solid var(--border);border-radius:2px;padding:5px 8px;font-size:14px;font-weight:700;width:90px;"></td>
+        <td>${existing?.place?`<strong>${existing.place}${ord(existing.place)}</strong>`:'—'}</td>
+        <td>${existing?`<span class="pts-chip">${existing.dbi_points}</span>`:'<span style="font-size:11px;color:var(--text-muted);">pending</span>'}</td></tr>`;
     }).join('')}
     </tbody></table>
   </div></div>
@@ -2216,7 +2217,7 @@ function renderScoringAdmin(){
     <button class="btn btn-gold btn-sm" onclick="runCalc(3)">⚡ Calculate &amp; Save Points</button>
   </div><div class="card-body">
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Select the winner of each Nassau bet for each match (Team A = players 1&amp;2, Team B = players 3&amp;4):</p>
-    <table class="data-table"><thead><tr><th>Match</th><th>Team A</th><th>Team B</th><th>Front 9</th><th>Back 9</th><th>Total Match</th></tr></thead><tbody>
+    <table class="data-table"><thead><tr><th>Match</th><th>Team A</th><th>Team B</th><th>Front 9</th><th>Back 9</th><th>Total Match</th><th>DBI Pts</th></tr></thead><tbody>
     ${(pairingsData[3]||Array(5).fill(null)).slice(0,5).map((g,mi)=>{
       const pi=g?.player_indices||[];
       const nameA=[pi[0],pi[1]].map(i=>golfers[i]?.name?.split(' ')[0]||'?').join(' & ');
@@ -2289,7 +2290,7 @@ function renderScoringAdmin(){
     <button class="btn btn-gold btn-sm" onclick="runCalc(6)">⚡ Calculate &amp; Save Points</button>
   </div><div class="card-body">
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">A-player uses 70% HDCP, B-player uses 30% HDCP. Select the Nassau winner for each match (Team A = players 1&amp;2, Team B = players 3&amp;4):</p>
-    <table class="data-table"><thead><tr><th>Match</th><th>Team A (A+B)</th><th>Team B (A+B)</th><th>Front 9</th><th>Back 9</th><th>Total Match</th></tr></thead><tbody>
+    <table class="data-table"><thead><tr><th>Match</th><th>Team A (A+B)</th><th>Team B (A+B)</th><th>Front 9</th><th>Back 9</th><th>Total Match</th><th>DBI Pts</th></tr></thead><tbody>
     ${(pairingsData[6]||Array(5).fill(null)).slice(0,5).map((g,mi)=>{
       const pi=g?.player_indices||[];
       const fmt=(i,role)=>{const gf=golfers[i];return gf?`${gf.name.split(' ')[0]}(${role==='A'?Math.round(gf.hdcp*0.7):Math.round(gf.hdcp*0.3)})`:'-';};
@@ -2305,9 +2306,13 @@ function renderScoringAdmin(){
         <option value="A" ${val==='A'?'selected':''}>Team A</option>
         <option value="B" ${val==='B'?'selected':''}>Team B</option>
         <option value="T" ${val==='T'?'selected':''}>Tie</option></select>`;
+      const rrA6=roundResults[6]?.[golfers[pi[0]]?.id];
+      const rrB6=roundResults[6]?.[golfers[pi[2]]?.id];
+      const dbi6=rrA6||rrB6?`A: <span class="pts-chip" style="font-size:10px;">${rrA6?.dbi_points??'?'}</span> B: <span class="pts-chip" style="font-size:10px;">${rrB6?.dbi_points??'?'}</span>`:'<span style="font-size:11px;color:var(--text-muted);">pending</span>';
       return `<tr><td><strong>Match ${mi+1}</strong></td>
         <td style="font-size:11px;">${nameA}</td><td style="font-size:11px;">${nameB}</td>
-        <td>${sel(`r6f_${mi}`,exF)}</td><td>${sel(`r6b_${mi}`,exB)}</td><td>${sel(`r6t_${mi}`,exT)}</td></tr>`;
+        <td>${sel(`r6f_${mi}`,exF)}</td><td>${sel(`r6b_${mi}`,exB)}</td><td>${sel(`r6t_${mi}`,exT)}</td>
+        <td>${dbi6}</td></tr>`;
     }).join('')}
     </tbody></table>
   </div></div>`;
@@ -2316,38 +2321,55 @@ function renderScoringAdmin(){
 }
 
 function renderR1Preview(){
-  const rows=golfers.map(g=>{
+  // Sort by vsQuota to show projected ranking
+  const items=golfers.map(g=>{
     const sc=holeScores[1]?.[g.id]||{};
     const holes=Object.keys(sc).length;
     const sfPts=calcStablefordPts(sc,g.hdcp);
     const quota=38-parseFloat(g.hdcp);
     const vsQ=sfPts-quota;
     const rr=roundResults[1]?.[g.id];
-    return `<tr><td>${g.name}</td><td>${g.hdcp}</td><td>${quota}</td>
+    return {g,holes,sfPts,quota,vsQ,rr};
+  }).sort((a,b)=>b.vsQ-a.vsQ);
+  const rows=items.map((item,rank)=>{
+    const {g,holes,sfPts,quota,vsQ,rr}=item;
+    const projPts=holes>0?Math.max(0,14-rank):null;
+    return `<tr><td><strong>${rank+1}.</strong> ${g.name}</td><td>${g.hdcp}</td><td>${quota}</td>
       <td>${holes}/18</td><td>${holes>0?sfPts:'—'}</td>
-      <td style="font-weight:700;color:${vsQ>=0?'var(--green)':'var(--red)'};">${holes>0?(vsQ>=0?'+':'')+vsQ:'—'}</td>
-      <td>${rr?`<span class="pts-chip">${rr.dbi_points}</span>`:'<span style="color:var(--text-muted);font-size:12px;">pending</span>'}</td></tr>`;
+      <td style="font-weight:700;color:${vsQ>=0?'#0a5c36':'var(--red)'};">${holes>0?(vsQ>=0?'+':'')+vsQ:'—'}</td>
+      <td>${projPts!==null?`<span class="pts-chip" style="opacity:${rr?0.4:1};">${projPts}</span>`:'—'}</td>
+      <td>${rr?`<span class="pts-chip">${rr.dbi_points}</span> <span style="font-size:10px;color:var(--text-muted);">(${rr.place}${ord(rr.place)})</span>`:'<span style="color:var(--text-muted);font-size:11px;">pending</span>'}</td></tr>`;
   });
   return `<table class="data-table" style="margin-top:10px;"><thead><tr>
-    <th>Golfer</th><th>HDCP</th><th>Quota</th><th>Holes</th><th>SF Pts</th><th>vs Quota</th><th>DBI Pts</th>
+    <th>Golfer</th><th>HDCP</th><th>Quota</th><th>Holes</th><th>SF Pts</th><th>vs Quota</th><th>Proj. DBI</th><th>Final DBI</th>
   </tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
 function renderR5Preview(){
-  const par=WILD_HORSE.par;
-  const rows=golfers.map(g=>{
+  const items=golfers.map(g=>{
     const gross=getGrossAny(g.id,5);
     const net=gross!==null?gross-parseFloat(g.hdcp):null;
     const rr=roundResults[5]?.[g.id];
     const holes=Object.keys(holeScores[5]?.[g.id]||{}).length;
-    return `<tr><td>${g.name}</td><td>${g.hdcp}</td>
+    return {g,gross,net,rr,holes};
+  }).sort((a,b)=>{
+    if(a.net===null&&b.net===null)return 0;
+    if(a.net===null)return 1;
+    if(b.net===null)return -1;
+    return a.net-b.net;
+  });
+  const rows=items.map((item,rank)=>{
+    const {g,gross,net,rr,holes}=item;
+    const projPts=net!==null?Math.max(0,16-rank):null;
+    return `<tr><td><strong>${net!==null?rank+1:'—'}.</strong> ${g.name}</td><td>${g.hdcp}</td>
       <td>${holes}/18</td>
       <td style="font-weight:700;">${gross!==null?gross:'—'}</td>
       <td style="font-weight:700;color:var(--navy);">${net!==null?Math.round(net):'—'}</td>
-      <td>${rr?`<span class="pts-chip">${rr.dbi_points}</span>`:'<span style="color:var(--text-muted);font-size:12px;">pending</span>'}</td></tr>`;
+      <td>${projPts!==null?`<span class="pts-chip" style="opacity:${rr?0.4:1};">${projPts}</span>`:'—'}</td>
+      <td>${rr?`<span class="pts-chip">${rr.dbi_points}</span> <span style="font-size:10px;color:var(--text-muted);">(${rr.place}${ord(rr.place)})</span>`:'<span style="color:var(--text-muted);font-size:11px;">pending</span>'}</td></tr>`;
   });
   return `<table class="data-table" style="margin-top:10px;"><thead><tr>
-    <th>Golfer</th><th>HDCP</th><th>Holes</th><th>Gross</th><th>Net</th><th>DBI Pts</th>
+    <th>Golfer</th><th>HDCP</th><th>Holes</th><th>Gross</th><th>Net</th><th>Proj. DBI</th><th>Final DBI</th>
   </tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
