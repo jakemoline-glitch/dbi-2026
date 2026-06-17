@@ -1943,15 +1943,21 @@ async function calcRound1(){
 const R2PTS=[7,5,4,2,0];
 async function calcRound2(){
   const grps=pairingsData[2]||[];
-  // Build team scores — use manually entered gross or sum of holes if available
-  // We'll read the manual team gross inputs from the scoring panel
+  const R2PTS=[7,5,4,2,0];
   const teams=grps.slice(0,5).map((g,gi)=>{
     const pi=g.player_indices||[];
-    const manualEl=document.getElementById(`r2gross_${gi}`);
-    const gross=manualEl?parseFloat(manualEl.value)||null:null;
+    // First try reading from team hole scores entered on scorecard
+    const teamSc=holeScores[2]?.[`team_${gi}`]||{};
+    const holesEntered=Object.keys(teamSc).length;
+    let gross=holesEntered>0?Object.values(teamSc).reduce((a,b)=>a+b,0):null;
+    // Fall back to manual input field on scoring tab
+    if(!gross){
+      const manualEl=document.getElementById(`r2gross_${gi}`);
+      gross=manualEl?parseFloat(manualEl.value)||null:null;
+    }
     return {gi,gross,playerIds:pi.map(idx=>golfers[idx]?.id).filter(Boolean)};
   }).filter(t=>t.gross!==null);
-  if(teams.length===0){showToast('Enter team scores in the scoring panel first.');return;}
+  if(teams.length===0){showToast('No Round 2 team scores found. Enter scores on the scorecards tab first.');return;}
   const ranked=assignRanks(teams,t=>t.gross,true);
   const results=[];
   ranked.forEach(t=>{
@@ -2002,18 +2008,33 @@ async function calcRound3(){
 const R4PTS=[10,7,5,3,0];
 async function calcRound4(){
   const grps=pairingsData[4]||[];
+  const R4PTS=[10,7,5,3,0];
   const teams=grps.slice(0,5).map((g,gi)=>{
     const pi=g.player_indices||[];
-    const manualEl=document.getElementById(`r4net_${gi}`);
-    const net=manualEl?parseFloat(manualEl.value)||null:null;
-    return {gi,net,playerIds:pi.map(idx=>golfers[idx]?.id).filter(Boolean)};
+    // First try reading from team hole scores entered on scorecard
+    const teamSc=holeScores[4]?.[`team_${gi}`]||{};
+    const holesEntered=Object.keys(teamSc).length;
+    let gross=holesEntered>0?Object.values(teamSc).reduce((a,b)=>a+b,0):null;
+    // Calculate net from gross using 2 lowest 80% handicaps
+    let net=null;
+    if(gross){
+      const hdcps=pi.map(i=>golfers[i]?.hdcp||0).map(h=>Math.round(h*0.8)).sort((a,b)=>a-b).slice(0,2);
+      net=gross-hdcps.reduce((a,b)=>a+b,0);
+    }
+    // Fall back to manual net input field on scoring tab
+    if(net===null){
+      const manualEl=document.getElementById(`r4net_${gi}`);
+      net=manualEl?parseFloat(manualEl.value)||null:null;
+      gross=gross||net; // use net as gross if no hole data
+    }
+    return {gi,gross,net,playerIds:pi.map(idx=>golfers[idx]?.id).filter(Boolean)};
   }).filter(t=>t.net!==null);
-  if(teams.length===0){showToast('Enter team net scores in the scoring panel first.');return;}
+  if(teams.length===0){showToast('No Round 4 team scores found. Enter scores on the scorecards tab first.');return;}
   const ranked=assignRanks(teams,t=>t.net,true);
   const results=[];
   ranked.forEach(t=>{
     const pts=R4PTS[t.rank-1]??0;
-    t.playerIds.forEach(gid=>results.push({golfer_id:gid,dbi_points:pts,net_score:t.net,place:t.rank,notes:`Team net:${t.net}`}));
+    t.playerIds.forEach(gid=>results.push({golfer_id:gid,dbi_points:pts,gross_score:t.gross,net_score:t.net,place:t.rank,notes:`Team net:${t.net}`}));
   });
   await saveRoundResults(4,results);
   renderLB();renderMyScores(curMyR);
@@ -2123,14 +2144,17 @@ function renderScoringAdmin(){
     <span>Round 2 — 4-Person Scramble</span>
     <button class="btn btn-gold btn-sm" onclick="runCalc(2)">⚡ Calculate &amp; Save Points</button>
   </div><div class="card-body">
-    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Enter each team's final gross score:</p>
-    <table class="data-table"><thead><tr><th>Group</th><th>Players</th><th>Team Gross Score</th></tr></thead><tbody>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Team gross scores are pulled automatically from the scorecards tab. You can also enter manually here as a fallback.</p>
+    <table class="data-table"><thead><tr><th>Group</th><th>Players</th><th>From Scorecard</th><th>Manual Override</th></tr></thead><tbody>
     ${(pairingsData[2]||Array(5).fill(null)).slice(0,5).map((g,gi)=>{
       const names=g?(g.player_indices||[]).map(idx=>golfers[idx]?.name?.split(' ')[0]||'?').join(', '):`Group ${gi+1}`;
       const existing=roundResults[2]?.[golfers[g?.player_indices?.[0]]?.id];
+      const teamSc=holeScores[2]?.[`team_${gi}`]||{};
+      const autoGross=Object.keys(teamSc).length>0?Object.values(teamSc).reduce((a,b)=>a+b,0):null;
       return `<tr><td><strong>Group ${gi+1}</strong></td><td style="font-size:12px;color:var(--text-muted);">${names}</td>
+        <td style="font-weight:700;color:${autoGross?'var(--navy)':'var(--text-muted)'};">${autoGross||'<span style="font-size:11px;font-style:italic;">No scorecard data</span>'}</td>
         <td><input type="number" id="r2gross_${gi}" placeholder="e.g. 62" min="50" max="120"
-          value="${existing?.gross_score||''}"
+          value="${existing?.gross_score||autoGross||''}"
           style="border:1px solid var(--border);border-radius:2px;padding:5px 8px;font-size:14px;font-weight:700;width:90px;"></td></tr>`;
     }).join('')}
     </tbody></table>
@@ -2169,15 +2193,23 @@ function renderScoringAdmin(){
     <span>Round 4 — 4-Person Shamble (80% HDCP)</span>
     <button class="btn btn-gold btn-sm" onclick="runCalc(4)">⚡ Calculate &amp; Save Points</button>
   </div><div class="card-body">
-    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Enter each team's final net score (sum of 2 best individual net scores, using 80% of each player's handicap):</p>
-    <table class="data-table"><thead><tr><th>Group</th><th>Players (80% HDCP)</th><th>Team Net Score</th></tr></thead><tbody>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Net scores are calculated automatically from the scorecards tab (gross minus 2 lowest 80% handicaps). You can also enter manually here as a fallback.</p>
+    <table class="data-table"><thead><tr><th>Group</th><th>Players (80% HDCP)</th><th>From Scorecard</th><th>Manual Override</th></tr></thead><tbody>
     ${(pairingsData[4]||Array(5).fill(null)).slice(0,5).map((g,gi)=>{
       const pi=g?.player_indices||[];
       const names=pi.map(i=>golfers[i]?`${golfers[i].name.split(' ')[0]} (${Math.round(golfers[i].hdcp*0.8)})`:'-').join(', ');
       const existing=roundResults[4]?.[golfers[pi[0]]?.id];
+      const teamSc=holeScores[4]?.[`team_${gi}`]||{};
+      const autoGross=Object.keys(teamSc).length>0?Object.values(teamSc).reduce((a,b)=>a+b,0):null;
+      let autoNet=null;
+      if(autoGross){
+        const hdcps=pi.map(i=>golfers[i]?.hdcp||0).map(h=>Math.round(h*0.8)).sort((a,b)=>a-b).slice(0,2);
+        autoNet=autoGross-hdcps.reduce((a,b)=>a+b,0);
+      }
       return `<tr><td><strong>Group ${gi+1}</strong></td><td style="font-size:11px;color:var(--text-muted);">${names}</td>
+        <td style="font-weight:700;color:${autoNet!==null?'var(--navy)':'var(--text-muted)'};">${autoNet!==null?`${autoGross} gross → <strong>${autoNet} net</strong>`:'<span style="font-size:11px;font-style:italic;">No scorecard data</span>'}</td>
         <td><input type="number" id="r4net_${gi}" placeholder="e.g. 58" min="40" max="110"
-          value="${existing?.net_score||''}"
+          value="${existing?.net_score||autoNet||''}"
           style="border:1px solid var(--border);border-radius:2px;padding:5px 8px;font-size:14px;font-weight:700;width:90px;"></td></tr>`;
     }).join('')}
     </tbody></table>
