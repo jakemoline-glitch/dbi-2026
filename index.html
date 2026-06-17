@@ -606,8 +606,21 @@ async function loadAll(){
   holeScores={};
   (hs.data||[]).forEach(s=>{
     if(!holeScores[s.round])holeScores[s.round]={};
-    if(!holeScores[s.round][s.golfer_id])holeScores[s.round][s.golfer_id]={};
-    holeScores[s.round][s.golfer_id][s.hole]=s.gross_score;
+    if(s.hole>100){
+      // Team score — find which group this golfer belongs to
+      const golferIdx=golfers.findIndex(g=>g.id===s.golfer_id);
+      const grps=pairingsData[s.round]||[];
+      grps.forEach((grp,gi)=>{
+        if((grp.player_indices||[]).includes(golferIdx)){
+          const teamKey=`team_${gi}`;
+          if(!holeScores[s.round][teamKey])holeScores[s.round][teamKey]={};
+          holeScores[s.round][teamKey][s.hole-100]=s.gross_score;
+        }
+      });
+    } else {
+      if(!holeScores[s.round][s.golfer_id])holeScores[s.round][s.golfer_id]={};
+      holeScores[s.round][s.golfer_id][s.hole]=s.gross_score;
+    }
   });
   roundResults={};
   (rr.data||[]).forEach(r=>{if(!roundResults[r.round])roundResults[r.round]={};roundResults[r.round][r.golfer_id]=r;});
@@ -623,6 +636,14 @@ async function loadAll(){
   (tm.data||[]).forEach(m=>{
     if(!teamMatches[m.round])teamMatches[m.round]={};
     teamMatches[m.round][m.match_num]={a1:m.a1_golfer_id,a2:m.a2_golfer_id,b1:m.b1_golfer_id,b2:m.b2_golfer_id};
+  });
+  // Load team hole scores from localStorage for R2/R4
+  [2,4].forEach(r=>{
+    if(!holeScores[r]) holeScores[r]={};
+    for(let gi=0;gi<5;gi++){
+      const saved=localStorage.getItem(`dbi26_team_${r}_${gi}`);
+      if(saved) holeScores[r][`team_${gi}`]=JSON.parse(saved);
+    }
   });
   // Sync team matches into pairings data for R3/R6
   syncTeamMatchesToPairings();
@@ -740,6 +761,12 @@ function sfPtsColor(pts){
 }
 
 function renderMyScores(r){
+  // Team rounds: show only my group's team scorecard
+  if(TEAM_ROUNDS.includes(r)){
+    const div=document.getElementById('my-scores-content');
+    if(div) _renderTeamSC(r,div,true); // myGroupOnly=true
+    return;
+  }
   const course=ROUND_COURSE[r];
   const par=course.par;
   const hdcpIndex=course.hdcp;
@@ -1081,6 +1108,7 @@ function getHdcpPct(r, golferIdx){
 // R1=quota based (show for reference), R3=match play net (critical), R4=shamble, R5=net, R6=match play
 const SHOW_STROKES_ROUNDS=[1,3,4,5,6];
 const MATCH_ROUNDS=[3,6];
+const TEAM_ROUNDS=[2,4]; // Rounds with a single team score per group (no individual holes)
 
 // ===================== MATCH PLAY ENGINE =====================
 
@@ -1215,7 +1243,196 @@ function renderSC(r){
   }
 }
 
+// Team scorecard for R2 (Scramble) and R4 (Shamble)
+function _renderTeamSC(r,div,myGroupOnly=false){
+  const course=ROUND_COURSE[r];
+  const par=course.par;
+  const h18=Array.from({length:18},(_,i)=>i+1);
+  const fPar=par.slice(0,9).reduce((a,b)=>a+b,0);
+  const bPar=par.slice(9).reduce((a,b)=>a+b,0);
+  const isScramble=r===2;
+  const isShamble=r===4;
+  const grps=pairingsData[r]||[];
+  const R2PTS=[7,5,4,2,0];
+  const R4PTS=[10,7,5,3,0];
+
+  const storedTee=localStorage.getItem(`dbi26_tee_r${r}`)||course.defaultTee;
+  const selTee=Object.keys(course.tees).includes(storedTee)?storedTee:course.defaultTee;
+  const teeData=course.tees[selTee];
+  const teeBtns=Object.keys(course.tees).map(t=>{
+    const td=course.tees[t]; const active=t===selTee;
+    return `<button onclick="switchTee(${r},'${t}')" style="padding:5px 12px;border-radius:2px;border:2px solid ${active?td.color:'var(--border)'};background:${active?td.color:'var(--white)'};color:${active?'#fff':'var(--text)'};font-family:'Inter',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">${t}</button>`;
+  }).join('');
+
+  const myGroupInfo=getMyGroup(r);
+  const myGroupIdx=myGroupInfo?.groupNum??-1;
+
+  // Filter to just my group if on My Scorecard tab
+  const grpsToShow=myGroupOnly
+    ? grps.filter((_,gi)=>gi===myGroupIdx)
+    : grps;
+
+  const formatNote=isScramble
+    ? '4-Person Scramble — Texas Scramble rules (3 drives each). Enter hole-by-hole team score.'
+    : '4-Person Shamble — 80% handicap. Best drive selected, all play own ball. Enter 2 best net scores per hole or team gross.';
+
+  let html=`
+  <div class="format-box"><strong>Round ${r} @ ${course.name} — ${RNAMES[r]}</strong><br>
+    <span style="font-size:12px;">${formatNote}</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${teeBtns}
+    <span style="font-size:12px;color:var(--text-muted);">Rating: <strong>${teeData.rating}</strong> · Slope: <strong>${teeData.slope}</strong></span>
+  </div>
+  <div class="card"><div class="card-header">
+    <span>Round ${r} — ${myGroupOnly?'Your Group':'All Groups'}</span>
+    <span class="badge">${course.name}</span>
+  </div>
+  <div class="scorecard-wrap"><table class="sc"><thead>
+    <tr>
+      <th class="nc">${myGroupOnly?'Your Group':'Group'}</th>
+      <th style="min-width:120px;">Players</th>
+      ${par.slice(0,9).map((_,i)=>`<th>${i+1}</th>`).join('')}
+      <th>OUT</th>
+      ${par.slice(9).map((_,i)=>`<th>${i+10}</th>`).join('')}
+      <th>IN</th><th>TOT</th>
+      ${isShamble?'<th>NET</th>':''}
+      <th>Place</th><th>DBI</th>
+    </tr>
+    <tr class="par-row">
+      <td class="nc" style="font-weight:700;color:var(--navy);">Par</td><td></td>
+      ${par.slice(0,9).map(p=>`<td>${p}</td>`).join('')}
+      <td class="tot-cell">${fPar}</td>
+      ${par.slice(9).map(p=>`<td>${p}</td>`).join('')}
+      <td class="tot-cell">${bPar}</td><td class="tot-cell">${fPar+bPar}</td>
+      ${isShamble?'<td class="tot-cell"></td>':''}
+      <td class="tot-cell"></td><td class="tot-cell"></td>
+    </tr>
+  </thead><tbody>`;
+
+  grpsToShow.forEach((grp,grpLoopIdx)=>{
+    // gi is the actual group index in the full pairings array
+    const gi=myGroupOnly?myGroupIdx:grpLoopIdx;
+    const pi=grp.player_indices||[];
+    const isMyGrp=gi===myGroupIdx;
+    const canEdit=IS_ADMIN||isMyGrp;
+
+    // Team scores stored under a special team key in holeScores
+    const teamKey=`team_${gi}`;
+    const sc=holeScores[r]?.[teamKey]||{};
+
+    const playerNames=pi.map(i=>{
+      const g=golfers[i]; if(!g) return '?';
+      return isShamble?`${g.name.split(' ')[0]} (${Math.round(g.hdcp*0.8)})`:g.name.split(' ')[0];
+    }).join(', ');
+
+    const f=h18.slice(0,9).reduce((a,h)=>a+(sc[h]||0),0);
+    const bk=h18.slice(9).reduce((a,h)=>a+(sc[h]||0),0);
+    const tot=f+bk;
+
+    let net=null;
+    if(isShamble&&tot){
+      const hdcps=pi.map(i=>golfers[i]?.hdcp||0).map(h=>Math.round(h*0.8)).sort((a,b)=>a-b).slice(0,2);
+      net=tot-hdcps.reduce((a,b)=>a+b,0);
+    }
+
+    const rr=roundResults[r]?.[golfers[pi[0]]?.id];
+    const place=rr?.place||null;
+    const dbi=rr?.dbi_points??null;
+    const rowStyle=isMyGrp?'me-row':canEdit?'can-edit-row':'';
+
+    html+=`<tr class="${rowStyle}">
+      <td class="nc" style="font-weight:700;">Group ${gi+1}${grp.tee_time?`<br><span style="font-size:10px;color:var(--text-muted);font-weight:400;">${grp.tee_time}</span>`:''}
+      </td>
+      <td style="font-size:11px;color:var(--text-muted);">${playerNames}</td>`;
+
+    h18.slice(0,9).forEach(h=>{
+      const v=sc[h]||''; const cl=v?holeColor(v,par[h-1]):'';
+      if(canEdit) html+=`<td style="padding:2px;"><input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="saveTeamHole(${r},${gi},${h},this.value,this)"></td>`;
+      else html+=`<td style="padding:2px;"><input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></td>`;
+    });
+    html+=`<td class="tot-cell">${f||'—'}</td>`;
+    h18.slice(9).forEach(h=>{
+      const v=sc[h]||''; const cl=v?holeColor(v,par[h-1]):'';
+      if(canEdit) html+=`<td style="padding:2px;"><input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="saveTeamHole(${r},${gi},${h},this.value,this)"></td>`;
+      else html+=`<td style="padding:2px;"><input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></td>`;
+    });
+    html+=`<td class="tot-cell">${tot||'—'}</td>`;
+    if(isShamble) html+=`<td class="tot-cell" style="font-weight:700;">${net!==null?net:'—'}</td>`;
+    html+=`<td class="tot-cell">${place?`${place}${ord(place)}`:tot?'?':'—'}</td>`;
+    html+=`<td class="tot-cell">${dbi!==null?`<span class="pts-chip">${dbi}</span>`:tot?'<span style="font-size:11px;color:var(--text-muted);">pending</span>':'—'}</td>`;
+    html+='</tr>';
+  });
+
+  html+=`</tbody></table></div>
+  <div style="padding:10px 14px;background:var(--parchment);border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
+    ${formatNote}
+    ${IS_ADMIN?`<button class="btn btn-gold btn-sm" style="margin-left:12px;" onclick="runCalc(${r})">⚡ Calculate Points</button>`:''}
+  </div></div>`;
+
+  div.innerHTML=html;
+}
+
+function saveTeamHole(r,groupIdx,hole,val,inp){
+  const v=parseInt(val);
+  const par=ROUND_COURSE[r].par;
+  inp.className='sc-hi'+(v?' '+holeColor(v,par[hole-1]):'');
+  // Update local cache immediately
+  if(!holeScores[r]) holeScores[r]={};
+  const teamKey=`team_${groupIdx}`;
+  if(!holeScores[r][teamKey]) holeScores[r][teamKey]={};
+  if(v>=1) holeScores[r][teamKey][hole]=v;
+  else delete holeScores[r][teamKey][hole];
+  // Update totals display
+  updateTeamTotals(r,groupIdx);
+  // Debounce save to Supabase
+  // We save team scores under the first player in the group's golfer_id
+  // using a negative hole offset to distinguish team from individual
+  clearTimeout(saveTimers[`team_${r}_${groupIdx}_${hole}`]);
+  saveTimers[`team_${r}_${groupIdx}_${hole}`]=setTimeout(async()=>{
+    if(!v||v<1) return;
+    const grp=(pairingsData[r]||[])[groupIdx];
+    if(!grp) return;
+    const firstPlayerId=golfers[grp.player_indices?.[0]]?.id;
+    if(!firstPlayerId) return;
+    // Save using a team-specific golfer_id slot: use negative of groupIdx+1 as a synthetic key
+    // Actually save under all 4 players so leaderboard can read it
+    const pi=grp.player_indices||[];
+    for(const pidx of pi){
+      const gid=golfers[pidx]?.id;
+      if(!gid) continue;
+      await sb.from('hole_scores').upsert(
+        {round:r, golfer_id:gid, hole:hole+100, gross_score:v}, // hole+100 = team score slot
+        {onConflict:'round,golfer_id,hole'}
+      );
+    }
+  },700);
+}
+
+function updateTeamTotals(r,groupIdx){
+  // Recalculate and refresh the team row totals in the DOM
+  const teamKey=`team_${groupIdx}`;
+  const sc=holeScores[r]?.[teamKey]||{};
+  const h18=Array.from({length:18},(_,i)=>i+1);
+  const f=h18.slice(0,9).reduce((a,h)=>a+(sc[h]||0),0);
+  const bk=h18.slice(9).reduce((a,h)=>a+(sc[h]||0),0);
+  const tot=f+bk;
+  // Update tot-cell values by re-rendering (lightweight: just re-call the render)
+  // For now just trigger a re-render of the team scorecard
+  clearTimeout(saveTimers[`teamrender_${r}`]);
+  saveTimers[`teamrender_${r}`]=setTimeout(()=>{
+    const isMyScores=document.getElementById('tab-myscores')?.classList.contains('active');
+    const isSC=document.getElementById('tab-scorecard')?.classList.contains('active');
+    if(isMyScores) _renderTeamSC(r,document.getElementById('my-scores-content'),true);
+    if(isSC) _renderTeamSC(r,document.getElementById('scorecard-content'),false);
+  },1200);
+}
+
 function _renderSC(r,div){
+  // Team rounds (R2 Scramble, R4 Shamble): one score per group, not per player
+  if(TEAM_ROUNDS.includes(r)){
+    _renderTeamSC(r,div);
+    return;
+  }
   const course=ROUND_COURSE[r];
   const par=course.par;
   const hdcpIndex=course.hdcp;
