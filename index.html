@@ -2479,8 +2479,11 @@ async function renderTeamCup(){
   const teamB=golfers.filter(g=>teamPlayers[g.id]==='B');
   const capA=golfers.find(g=>g.id===teamComp.team_a_captain_id);
   const capB=golfers.find(g=>g.id===teamComp.team_b_captain_id);
-  const nameA=teamComp.team_a_name||'Team A';
-  const nameB=teamComp.team_b_name||'Team B';
+  // Auto-generate team names from captain last names if captains are set
+  const autoNameA=capA?`Team ${capA.name.split(' ').slice(-1)[0]}`:null;
+  const autoNameB=capB?`Team ${capB.name.split(' ').slice(-1)[0]}`:null;
+  const nameA=autoNameA||teamComp.team_a_name||'Team A';
+  const nameB=autoNameB||teamComp.team_b_name||'Team B';
 
   const r3pts=calcTeamRoundPoints(3);
   const r6pts=calcTeamRoundPoints(6);
@@ -2602,19 +2605,19 @@ async function renderTeamCup(){
         <p style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Team Names &amp; Captains</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
-            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Team A Name</label>
-            <input type="text" id="tc-name-a" value="${nameA}" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;">
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Team A Name <span style="color:var(--gold);">(auto from captain)</span></label>
+            <input type="text" id="tc-name-a" value="${nameA}" placeholder="Set captain to auto-name" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;color:var(--text-muted);" readonly>
             <label style="font-size:11px;color:var(--text-muted);display:block;margin-top:8px;margin-bottom:4px;">Team A Captain</label>
-            <select id="tc-cap-a" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;">
+            <select id="tc-cap-a" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;" onchange="previewTeamName('A',this)">
               <option value="">Select captain...</option>
               ${golfers.map(g=>`<option value="${g.id}" ${g.id===teamComp.team_a_captain_id?'selected':''}>${g.name}</option>`).join('')}
             </select>
           </div>
           <div>
-            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Team B Name</label>
-            <input type="text" id="tc-name-b" value="${nameB}" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;">
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Team B Name <span style="color:var(--gold);">(auto from captain)</span></label>
+            <input type="text" id="tc-name-b" value="${nameB}" placeholder="Set captain to auto-name" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;color:var(--text-muted);" readonly>
             <label style="font-size:11px;color:var(--text-muted);display:block;margin-top:8px;margin-bottom:4px;">Team B Captain</label>
-            <select id="tc-cap-b" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;">
+            <select id="tc-cap-b" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-size:13px;font-family:'Inter',sans-serif;" onchange="previewTeamName('B',this)">
               <option value="">Select captain...</option>
               ${golfers.map(g=>`<option value="${g.id}" ${g.id===teamComp.team_b_captain_id?'selected':''}>${g.name}</option>`).join('')}
             </select>
@@ -2663,11 +2666,24 @@ async function renderTeamCup(){
 }
 
 // ---- Team admin save functions ----
+function previewTeamName(team, sel){
+  const gid=parseInt(sel.value);
+  const g=golfers.find(x=>x.id===gid);
+  const lastName=g?g.name.split(' ').slice(-1)[0]:'';
+  const input=document.getElementById(`tc-name-${team.toLowerCase()}`);
+  if(input) input.value=lastName?`Team ${lastName}`:'';
+}
+
 async function saveTeamSetup(){
-  const nameA=document.getElementById('tc-name-a')?.value||'Team A';
-  const nameB=document.getElementById('tc-name-b')?.value||'Team B';
   const capA=parseInt(document.getElementById('tc-cap-a')?.value)||null;
   const capB=parseInt(document.getElementById('tc-cap-b')?.value)||null;
+  const capAGolfer=golfers.find(g=>g.id===capA);
+  const capBGolfer=golfers.find(g=>g.id===capB);
+  // Auto-name from captain last names, fall back to manual input
+  const autoNameA=capAGolfer?`Team ${capAGolfer.name.split(' ').slice(-1)[0]}`:null;
+  const autoNameB=capBGolfer?`Team ${capBGolfer.name.split(' ').slice(-1)[0]}`:null;
+  const nameA=autoNameA||document.getElementById('tc-name-a')?.value||'Team A';
+  const nameB=autoNameB||document.getElementById('tc-name-b')?.value||'Team B';
   const {data:existing}=await sb.from('team_competition').select('id').limit(1);
   if(existing&&existing[0]){
     await sb.from('team_competition').update({team_a_name:nameA,team_b_name:nameB,team_a_captain_id:capA,team_b_captain_id:capB}).eq('id',existing[0].id);
@@ -2675,7 +2691,7 @@ async function saveTeamSetup(){
     await sb.from('team_competition').insert({team_a_name:nameA,team_b_name:nameB,team_a_captain_id:capA,team_b_captain_id:capB});
   }
   teamComp={...teamComp,team_a_name:nameA,team_b_name:nameB,team_a_captain_id:capA,team_b_captain_id:capB};
-  showToast('Team setup saved!');
+  showToast(`Teams saved: ${nameA} vs ${nameB}!`);
   renderTeamCup();
 }
 
