@@ -58,7 +58,10 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
 .card{background:var(--white);border-radius:2px;border:1px solid var(--border);margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,0.15);}
 .card>.card-header,.card>.card-body{border-radius:inherit;}
 .card:has(.scorecard-wrap){overflow:visible;}
-.scorecard-wrap{overflow-x:auto;border-radius:0 0 2px 2px;}
+.scorecard-wrap{overflow-x:auto;border-radius:0 0 2px 2px;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--gold) transparent;}
+.scorecard-wrap::-webkit-scrollbar{height:6px;}
+.scorecard-wrap::-webkit-scrollbar-track{background:transparent;}
+.scorecard-wrap::-webkit-scrollbar-thumb{background:var(--gold);border-radius:3px;}
 .card-header{background:var(--navy);color:var(--white);padding:11px 18px;display:flex;align-items:center;gap:10px;font-family:'Inter',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border-bottom:2px solid var(--gold);}
 .card-header .badge{background:var(--gold);color:var(--navy);border-radius:1px;padding:2px 10px;font-size:9px;font-weight:700;letter-spacing:1px;}
 .card-body{padding:18px;}
@@ -94,8 +97,8 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
 .hole-cell{display:flex;flex-direction:column;align-items:center;gap:3px;}
 .hole-lbl{font-family:'Inter',sans-serif;font-size:9px;font-weight:700;color:var(--text-light);letter-spacing:1px;text-transform:uppercase;}
 .hi-wrap{position:relative;display:inline-block;}
-.stroke-corner{position:absolute;top:2px;right:2px;display:flex;gap:1px;pointer-events:none;z-index:2;}
-.stroke-dot{width:5px;height:5px;border-radius:50%;background:#b8965a;display:block;box-shadow:0 0 0 1px rgba(255,255,255,0.8);}
+.stroke-corner{position:absolute;top:1px;right:1px;display:flex;gap:1px;pointer-events:none;z-index:2;}
+.stroke-dot{width:4px;height:4px;border-radius:50%;background:#b8965a;display:block;box-shadow:0 0 0 1px rgba(255,255,255,0.8);}
 .sc-hi-wrap{position:relative;display:inline-block;line-height:0;}
 .hi{width:40px;height:38px;border:1px solid var(--border);border-radius:2px;text-align:center;font-size:16px;font-weight:600;font-family:'Inter',sans-serif;color:var(--text);background:var(--white);padding:0;}
 .hi:focus{outline:2px solid var(--gold);border-color:var(--gold);}
@@ -109,17 +112,17 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
 .tot-item{background:var(--parchment);border:1px solid var(--border);border-radius:2px;padding:7px 14px;text-align:center;min-width:60px;}
 .tot-lbl{font-size:9px;color:var(--text-light);text-transform:uppercase;letter-spacing:1.5px;font-family:'Inter',sans-serif;font-weight:600;}
 .tot-val{font-size:20px;font-weight:700;color:var(--navy);font-family:'Playfair Display',serif;}
-.sc{border-collapse:collapse;font-size:12px;min-width:900px;width:100%;}
-.sc th{background:var(--navy);color:var(--gold-light);padding:7px 6px;text-align:center;font-family:'Inter',sans-serif;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;}
-.sc th.nc{text-align:left;min-width:120px;}
-.sc td{padding:4px 5px;text-align:center;border-bottom:1px solid #ede8da;border-right:1px solid #f0ece0;}
-.sc td.nc{text-align:left;font-weight:600;font-size:12px;padding-left:10px;white-space:nowrap;font-family:'Inter',sans-serif;}
+.sc{border-collapse:collapse;font-size:11px;width:auto;table-layout:auto;}
+.sc th{background:var(--navy);color:var(--gold-light);padding:5px 3px;text-align:center;font-family:'Inter',sans-serif;font-size:8px;letter-spacing:0.5px;text-transform:uppercase;font-weight:700;}
+.sc th.nc{text-align:left;width:68px;min-width:68px;max-width:68px;}
+.sc td{padding:2px 2px;text-align:center;border-bottom:1px solid #ede8da;border-right:1px solid #f0ece0;}
+.sc td.nc{text-align:left;font-weight:600;font-size:10px;padding-left:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Inter',sans-serif;width:68px;max-width:68px;}
 .sc tr:last-child td{border-bottom:none;}
 .sc .par-row{background:var(--parchment);font-size:10px;color:var(--text-muted);}
-.sc .tot-cell{background:var(--parchment);font-weight:700;color:var(--navy);}
+.sc .tot-cell{background:var(--parchment);font-weight:700;color:var(--navy);width:26px;min-width:26px;font-size:10px;}
 .sc .me-row td{background:#eef3ff;}
 .sc .can-edit-row td{background:#fdf9ee;}
-.sc-hi{width:30px;height:24px;border:1px solid var(--border);border-radius:2px;text-align:center;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;color:var(--text);background:var(--white);padding:0;}
+.sc-hi{width:22px;height:20px;border:1px solid var(--border);border-radius:2px;text-align:center;font-size:10px;font-weight:600;font-family:'Inter',sans-serif;color:var(--text);background:var(--white);padding:0;}
 .sc-hi.eagle{background:#0a1e38;color:#90c0f0;}
 .sc-hi.birdie{background:#0a2e18;color:#70d490;}
 .sc-hi.par{background:#f0f4f8;color:var(--navy);}
@@ -169,7 +172,24 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
 .agenda-time{min-width:140px;padding:11px 14px;font-size:11px;font-weight:600;color:var(--navy);font-family:'Inter',sans-serif;letter-spacing:0.5px;border-right:2px solid var(--border);background:var(--parchment);}
 .agenda-desc{padding:11px 14px;font-size:13px;color:var(--text);line-height:1.5;}
 .agenda-desc .hl{font-weight:700;color:var(--navy);}
-@media(max-width:600px){.header-text h1{font-size:20px;}.hi{width:34px;height:34px;font-size:14px;}.hole-grid{gap:3px;padding:10px;}}
+@media(max-width:600px){
+  .header-text h1{font-size:20px;}
+  .hi{width:34px;height:34px;font-size:14px;}
+  .hole-grid{gap:3px;padding:10px;}
+  .page-wrap{padding:18px 14px 50px;}
+  .header-inner{padding:14px 16px;gap:10px;}
+  .logo-crest{width:46px;height:46px;}
+  .logo-crest-text{font-size:13px;}
+  .nav-btn{padding:10px 11px;font-size:9px;}
+  .card-body{padding:14px;}
+  .section-title{font-size:21px;}
+  .totals-bar{gap:6px;}
+  .tot-item{padding:6px 10px;min-width:50px;}
+}
+@media(max-width:380px){
+  .sc th.nc,.sc td.nc{width:54px;min-width:54px;max-width:54px;font-size:9px;}
+  .sc-hi{width:19px;height:18px;font-size:9px;}
+}
 
 </style>
 </head>
