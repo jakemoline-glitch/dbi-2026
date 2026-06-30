@@ -802,7 +802,7 @@ function renderLB(){
   el.innerHTML=ranked.map((g,i)=>{
     const tc=i===0?'top1':i===1?'top2':i===2?'top3':'';
     const inShootout=i<10;
-    const entHole=i<4?1:i<6?2:i<8?3:i===8?4:5;
+    const entHole=i<1?5:i<2?4:i<4?3:i<6?2:1;
     const chips=[1,2,3,4,5,6].map(r=>{const p=getRndPts(g.id,r);return p!==null?`<span class="rnd-chip scored">R${r}:${p}</span>`:`<span class="rnd-chip">R${r}</span>`;}).join('');
     const isMe=g.id===ME?.id;
     return `<div class="lb-row" style="${isMe?'background:#f0f8f3;':''}">
@@ -2191,7 +2191,7 @@ async function savePairings(){
 function renderShootout(){
   const ranked=golfers.map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total);
   const top10=ranked.slice(0,10);
-  const entHole=s=>s<4?1:s<6?2:s<8?3:s===8?4:5;
+  const entHole=s=>s<1?5:s<2?4:s<4?3:s<6?2:1;
   const mulls=hdcp=>hdcp>=24?2:hdcp>=20?1:0;
   let html=top10.map((g,seed)=>{
     const so=shootoutSt[g.id];const status=so?.status||'active';
@@ -2222,7 +2222,7 @@ function renderShootoutScorecard(top10){
 
   const par=WILD_HORSE.par.slice(0,7);
   const hdcpIdx=WILD_HORSE.hdcp.slice(0,7);
-  const entHole=s=>s<4?1:s<6?2:s<8?3:s===8?4:5;
+  const entHole=s=>s<1?5:s<2?4:s<4?3:s<6?2:1;
   const mulls=hdcp=>hdcp>=24?2:hdcp>=20?1:0;
 
   let html=`
