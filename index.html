@@ -602,6 +602,12 @@ async function loadAll(){
     sb.from('team_players').select('*'),
     sb.from('team_matches').select('*'),
   ]);
+  // Surface any load errors instead of silently showing empty data
+  const loadErrors=[hs,rr,pr,so,tc,tp,tm].filter(r=>r.error).map(r=>r.error.message);
+  if(loadErrors.length){
+    console.error('loadAll errors:',loadErrors);
+    showToast(`⚠️ Some data failed to load: ${loadErrors[0]}`);
+  }
   // Parse pairings FIRST so hole score team-lookups work correctly
   pairingsData={};
   (pr.data||[]).forEach(p=>{if(!pairingsData[p.round])pairingsData[p.round]=[];pairingsData[p.round].push(p);});
@@ -664,14 +670,6 @@ async function loadAll(){
   (tm.data||[]).forEach(m=>{
     if(!teamMatches[m.round])teamMatches[m.round]={};
     teamMatches[m.round][m.match_num]={a1:m.a1_golfer_id,a2:m.a2_golfer_id,b1:m.b1_golfer_id,b2:m.b2_golfer_id};
-  });
-  // Load team hole scores from localStorage for R2 (backup/legacy)
-  [2].forEach(r=>{
-    if(!holeScores[r]) holeScores[r]={};
-    for(let gi=0;gi<5;gi++){
-      const saved=localStorage.getItem(`dbi26_team_${r}_${gi}`);
-      if(saved&&!holeScores[r][`team_${gi}`]) holeScores[r][`team_${gi}`]=JSON.parse(saved);
-    }
   });
   // Sync team matches into pairings data for R3/R6
   syncTeamMatchesToPairings();
@@ -1043,18 +1041,51 @@ function onHoleInputForGolfer(inp,r,h,pi,golferId){
   const coursePar=ROUND_COURSE[r]?ROUND_COURSE[r].par:PAR;
   const v=parseInt(inp.value);
   inp.className=(inp.classList.contains('sc-hi')?'sc-hi':'hi')+(v?' '+holeColor(v,coursePar[pi]):'');
+  markUnsaved(inp);
   clearTimeout(saveTimers[`${r}_${h}_${golferId}`]);
-  saveTimers[`${r}_${h}_${golferId}`]=setTimeout(()=>persistHole(r,h,v,golferId),700);
+  saveTimers[`${r}_${h}_${golferId}`]=setTimeout(()=>persistHole(r,h,v,golferId,inp),700);
   if(!holeScores[r])holeScores[r]={};
   if(!holeScores[r][golferId])holeScores[r][golferId]={};
   if(v>=1)holeScores[r][golferId][h]=v; else delete holeScores[r][golferId][h];
   if(golferId===ME.id) updateTotals(r);
 }
 
-async function persistHole(r,h,v,golferId){
+async function persistHole(r,h,v,golferId,inp){
   const gid=golferId||ME.id;
-  if(!v||v<1)return;
-  await sb.from('hole_scores').upsert({round:r,golfer_id:gid,hole:h,gross_score:v},{onConflict:'round,golfer_id,hole'});
+  if(!v||v<1) return;
+  try{
+    const {error}=await sb.from('hole_scores').upsert({round:r,golfer_id:gid,hole:h,gross_score:v},{onConflict:'round,golfer_id,hole'});
+    if(error){
+      console.error('persistHole error:',error,{round:r,golfer_id:gid,hole:h,gross_score:v});
+      if(inp) markSaveFailed(inp, error.message);
+      showToast(`⚠️ Save failed: ${error.message}`);
+      return;
+    }
+    if(inp) markSaved(inp);
+  } catch(err){
+    console.error('persistHole exception:',err,{round:r,golfer_id:gid,hole:h,gross_score:v});
+    if(inp) markSaveFailed(inp, err.message);
+    showToast(`⚠️ Save error: ${err.message}`);
+  }
+}
+
+// ===================== SAVE STATUS INDICATORS =====================
+// Visual feedback so a failed save is never silent
+function markUnsaved(inp){
+  if(!inp) return;
+  inp.dataset.saveState='pending';
+  inp.style.boxShadow='0 0 0 2px rgba(184,150,90,0.5)';
+}
+function markSaved(inp){
+  if(!inp) return;
+  inp.dataset.saveState='saved';
+  inp.style.boxShadow='none';
+}
+function markSaveFailed(inp, msg){
+  if(!inp) return;
+  inp.dataset.saveState='failed';
+  inp.style.boxShadow='0 0 0 3px rgba(220,38,38,0.7)';
+  inp.title=`⚠️ NOT SAVED: ${msg||'unknown error'}`;
 }
 
 function updateTotals(r){
@@ -1601,24 +1632,29 @@ function saveR6TeamHole(groupIdx,team,hole,val,inp){
   if(!holeScores[6][teamKey]) holeScores[6][teamKey]={};
   if(v>=1) holeScores[6][teamKey][hole]=v;
   else delete holeScores[6][teamKey][hole];
+  markUnsaved(inp);
 
   clearTimeout(saveTimers[`r6_${groupIdx}_${team}_${hole}`]);
   saveTimers[`r6_${groupIdx}_${team}_${hole}`]=setTimeout(async()=>{
     if(!v||v<1) return;
     const grp=(pairingsData[6]||[])[groupIdx];
-    if(!grp) return;
+    if(!grp){ markSaveFailed(inp,'No group found'); return; }
     const pi=grp.player_indices||[];
-    // Save under both players on that team so DB persists it (using hole+200 for team A, hole+300 for team B to avoid collision)
     const offset=team==='A'?200:300;
     const teamPlayerIdx=team==='A'?[pi[0],pi[1]]:[pi[2],pi[3]];
+    if(!teamPlayerIdx.filter(Boolean).length){ markSaveFailed(inp,'No players found for this team'); return; }
+    let allOk=true, lastErr=null;
     for(const pidx of teamPlayerIdx){
       const gid=golfers[pidx]?.id;
       if(!gid) continue;
-      await sb.from('hole_scores').upsert(
+      const {error}=await sb.from('hole_scores').upsert(
         {round:6, golfer_id:gid, hole:hole+offset, gross_score:v},
         {onConflict:'round,golfer_id,hole'}
       );
+      if(error){allOk=false;lastErr=error;console.error('saveR6TeamHole error:',error,{round:6,golfer_id:gid,hole:hole+offset});}
     }
+    if(allOk) markSaved(inp);
+    else { markSaveFailed(inp, lastErr?.message||'Save failed'); showToast(`⚠️ Save failed: ${lastErr?.message||'unknown error'}`); }
   },700);
 
   // Debounced re-render to update match status
@@ -1643,27 +1679,27 @@ function saveTeamHole(r,groupIdx,hole,val,inp){
   else delete holeScores[r][teamKey][hole];
   // Update totals display
   updateTeamTotals(r,groupIdx);
+  markUnsaved(inp);
   // Debounce save to Supabase
-  // We save team scores under the first player in the group's golfer_id
-  // using a negative hole offset to distinguish team from individual
   clearTimeout(saveTimers[`team_${r}_${groupIdx}_${hole}`]);
   saveTimers[`team_${r}_${groupIdx}_${hole}`]=setTimeout(async()=>{
     if(!v||v<1) return;
     const grp=(pairingsData[r]||[])[groupIdx];
-    if(!grp) return;
-    const firstPlayerId=golfers[grp.player_indices?.[0]]?.id;
-    if(!firstPlayerId) return;
-    // Save using a team-specific golfer_id slot: use negative of groupIdx+1 as a synthetic key
-    // Actually save under all 4 players so leaderboard can read it
+    if(!grp){ markSaveFailed(inp,'No group found'); return; }
     const pi=grp.player_indices||[];
+    if(!pi.length){ markSaveFailed(inp,'No players in group'); return; }
+    let allOk=true, lastErr=null;
     for(const pidx of pi){
       const gid=golfers[pidx]?.id;
       if(!gid) continue;
-      await sb.from('hole_scores').upsert(
-        {round:r, golfer_id:gid, hole:hole+100, gross_score:v}, // hole+100 = team score slot
+      const {error}=await sb.from('hole_scores').upsert(
+        {round:r, golfer_id:gid, hole:hole+100, gross_score:v},
         {onConflict:'round,golfer_id,hole'}
       );
+      if(error){allOk=false;lastErr=error;console.error('saveTeamHole error:',error,{round:r,golfer_id:gid,hole:hole+100});}
     }
+    if(allOk) markSaved(inp);
+    else { markSaveFailed(inp, lastErr?.message||'Save failed'); showToast(`⚠️ Save failed: ${lastErr?.message||'unknown error'}`); }
   },700);
 }
 
