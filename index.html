@@ -1014,6 +1014,40 @@ function renderMyScores(r){
     }
   });
 
+  // R4 Shamble: add a team net summary row (best 2 net scores combined per hole)
+  if(r===4 && myGroup){
+    const pi=myGroup.playerIndices||[];
+    const holeNets=[];
+    let teamNetTotal=0, holesWithData=0;
+    for(let h=1;h<=18;h++){
+      const nets=pi.map(idx=>{
+        const gf=golfers[idx]; if(!gf) return null;
+        const gross=holeScores[4]?.[gf.id]?.[h]; if(!gross) return null;
+        const strokes=getStrokes(gf.hdcp,hdcpIndex[h-1],0.8);
+        return gross-strokes;
+      }).filter(n=>n!==null).sort((a,b)=>a-b);
+      const best2=nets.slice(0,2);
+      const hNet=best2.length?best2.reduce((a,b)=>a+b,0):null;
+      holeNets.push(hNet);
+      if(hNet!==null){teamNetTotal+=hNet;holesWithData++;}
+    }
+    const fNet=holeNets.slice(0,9).filter(n=>n!==null).reduce((a,b)=>a+b,0);
+    const bNet=holeNets.slice(9).filter(n=>n!==null).reduce((a,b)=>a+b,0);
+    const rr4=roundResults[4]?.[golfers[pi[0]]?.id];
+    const place4=rr4?.place; const dbi4=rr4?.dbi_points;
+    html+=`<tr style="background:#e8f0ff;border-top:2px solid #1e3560;">
+      <td class="nc" colspan="2" style="font-size:11px;font-weight:700;color:#1e3560;padding:5px 10px;">
+        ↑ Team Net (best 2/hole)${place4?` · ${place4}${ord(place4)}`:''}${dbi4!==undefined?` · <span class="pts-chip" style="font-size:10px;">${dbi4} pts</span>`:''}
+      </td>
+      ${holeNets.slice(0,9).map(n=>`<td style="text-align:center;font-size:11px;font-weight:700;color:#1e3560;">${n!==null?n:'—'}</td>`).join('')}
+      <td class="tot-cell" style="background:#d0dcf8;font-weight:700;color:#1e3560;">${holeNets.slice(0,9).filter(n=>n!==null).length?fNet:'—'}</td>
+      ${holeNets.slice(9).map(n=>`<td style="text-align:center;font-size:11px;font-weight:700;color:#1e3560;">${n!==null?n:'—'}</td>`).join('')}
+      <td class="tot-cell" style="background:#d0dcf8;font-weight:700;color:#1e3560;">${holeNets.slice(9).filter(n=>n!==null).length?bNet:'—'}</td>
+      <td class="tot-cell" style="background:#d0dcf8;"></td>
+      <td class="tot-cell" style="background:#1e3560;font-weight:700;color:#d4b07a;font-size:14px;">${holesWithData?teamNetTotal:'—'}</td>
+    </tr>`;
+  }
+
   html+=`</tbody></table></div>
   <div style="padding:10px 14px;background:var(--parchment);border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
     ${course.name} · ${course.location} · Par ${fPar+bPar} · ${selTee} Tees: ${teeData.yards.reduce((a,b)=>a+b,0)} yds · Rating ${teeData.rating} / Slope ${teeData.slope}
@@ -2398,10 +2432,23 @@ async function calcRound3(){
     const pi=g.player_indices||[];
     const teamA=[golfers[pi[0]]?.id,golfers[pi[1]]?.id].filter(Boolean);
     const teamB=[golfers[pi[2]]?.id,golfers[pi[3]]?.id].filter(Boolean);
-    const front=document.getElementById(`r3f_${mi}`)?.value;
-    const back=document.getElementById(`r3b_${mi}`)?.value;
-    const total=document.getElementById(`r3t_${mi}`)?.value;
+
+    // Try auto-calculating from individual best-ball hole scores first
+    const holeResults=calcMatchHoles(3,mi);
+    const played=holeResults.filter(h=>h!==null).length;
+    let front,back,total;
+    if(played>0){
+      const nassau=calcNassau(holeResults);
+      front=nassau.front==='T'?'T':nassau.front;
+      back=nassau.back==='T'?'T':nassau.back;
+      total=nassau.overall==='T'?'T':nassau.overall;
+    }
+    // Fall back to manual dropdowns if no scorecard data
+    if(!front) front=document.getElementById(`r3f_${mi}`)?.value;
+    if(!back) back=document.getElementById(`r3b_${mi}`)?.value;
+    if(!total) total=document.getElementById(`r3t_${mi}`)?.value;
     if(!front&&!back&&!total)return;
+
     const ptsA={},ptsB={};
     teamA.forEach(id=>{ptsA[id]=0;});teamB.forEach(id=>{ptsB[id]=0;});
     [[front,3],[back,3],[total,3]].forEach(([w,pts])=>{
@@ -2415,7 +2462,7 @@ async function calcRound3(){
     teamA.forEach(id=>results.push({golfer_id:id,dbi_points:ptsA[id],place:aTotal>=bTotal?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
     teamB.forEach(id=>results.push({golfer_id:id,dbi_points:ptsB[id],place:bTotal>aTotal?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
   });
-  if(results.length===0){showToast('Select Front/Back/Total winners in the scoring panel first.');return;}
+  if(results.length===0){showToast('No Round 3 scores found. Enter individual hole scores on the scorecards tab, or select winners manually below.');return;}
   await saveRoundResults(3,results);
   renderLB();renderMyScores(curMyR);
   return results;
@@ -2621,8 +2668,8 @@ function renderScoringAdmin(){
     <span>Round 3 — 2v2 Best Ball Nassau</span>
     <button class="btn btn-gold btn-sm" onclick="runCalc(3)">⚡ Calculate &amp; Save Points</button>
   </div><div class="card-body">
-    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Select the winner of each Nassau bet for each match (Team A = players 1&amp;2, Team B = players 3&amp;4):</p>
-    <table class="data-table"><thead><tr><th>Match</th><th>Team A</th><th>Team B</th><th>Front 9</th><th>Back 9</th><th>Total Match</th><th>DBI Pts</th></tr></thead><tbody>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Best ball — each player enters individual scores on the scorecards tab. Results auto-calculate from that data; manual override available below if needed (Team A = players 1&amp;2, Team B = players 3&amp;4).</p>
+    <table class="data-table"><thead><tr><th>Match</th><th>Team A</th><th>Team B</th><th>Auto Status</th><th>Front 9 Override</th><th>Back 9 Override</th><th>Total Override</th><th>DBI Pts</th></tr></thead><tbody>
     ${(pairingsData[3]||Array(5).fill(null)).slice(0,5).map((g,mi)=>{
       const pi=g?.player_indices||[];
       const nameA=[pi[0],pi[1]].map(i=>golfers[i]?.name?.split(' ')[0]||'?').join(' & ');
@@ -2632,14 +2679,24 @@ function renderScoringAdmin(){
       const exF=exNote.match(/Front:(\w+)/)?.[1]||'';
       const exB=exNote.match(/Back:(\w+)/)?.[1]||'';
       const exT=exNote.match(/Total:(\w+)/)?.[1]||'';
+      // Auto-calculated status from scorecard
+      const holeResults=calcMatchHoles(3,mi);
+      const played=holeResults.filter(h=>h!==null).length;
+      const latestStatus=calcRunningStatus(holeResults).filter(s=>s!==null).slice(-1)[0];
+      const autoStatusHtml=played>0?`${matchStatusBadge(latestStatus)} <span style="font-size:10px;color:var(--text-muted);">(${played}/18 holes)</span>`:'<span style="font-size:11px;color:var(--text-muted);font-style:italic;">No scores yet</span>';
       const sel=(id,val)=>`<select id="${id}" style="border:1px solid var(--border);border-radius:2px;padding:4px 6px;font-size:13px;font-family:'Inter',sans-serif;">
-        <option value="">—</option>
+        <option value="">Auto</option>
         <option value="A" ${val==='A'?'selected':''}>Team A</option>
         <option value="B" ${val==='B'?'selected':''}>Team B</option>
         <option value="T" ${val==='T'?'selected':''}>Tie</option></select>`;
+      const rrA3=roundResults[3]?.[golfers[pi[0]]?.id];
+      const rrB3=roundResults[3]?.[golfers[pi[2]]?.id];
+      const dbi3=rrA3||rrB3?`A: <span class="pts-chip" style="font-size:10px;">${rrA3?.dbi_points??'?'}</span> B: <span class="pts-chip" style="font-size:10px;">${rrB3?.dbi_points??'?'}</span>`:'<span style="font-size:11px;color:var(--text-muted);">pending</span>';
       return `<tr><td><strong>Match ${mi+1}</strong></td>
         <td style="font-size:12px;">${nameA}</td><td style="font-size:12px;">${nameB}</td>
-        <td>${sel(`r3f_${mi}`,exF)}</td><td>${sel(`r3b_${mi}`,exB)}</td><td>${sel(`r3t_${mi}`,exT)}</td></tr>`;
+        <td>${autoStatusHtml}</td>
+        <td>${sel(`r3f_${mi}`,exF)}</td><td>${sel(`r3b_${mi}`,exB)}</td><td>${sel(`r3t_${mi}`,exT)}</td>
+        <td>${dbi3}</td></tr>`;
     }).join('')}
     </tbody></table>
   </div></div>
