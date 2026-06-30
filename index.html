@@ -2188,6 +2188,65 @@ async function resetRoundScores(r){
   renderScoringAdmin();
 }
 
+async function resetTeamCup(){
+  if(!confirm('⚠️ This will clear the Team Cup setup — captains, team names, player assignments, and R3/R6 match lineups. Round 3 & 6 pairings will reset to default placeholders. Continue?')) return;
+  showToast('Resetting Team Cup...');
+  await Promise.all([
+    sb.from('team_competition').delete().neq('id',0),
+    sb.from('team_players').delete().neq('id',0),
+    sb.from('team_matches').delete().neq('id',0),
+  ]);
+  // Re-seed a blank team_competition row
+  await sb.from('team_competition').insert({team_a_name:'Team A',team_b_name:'Team B'});
+  // Reset R3/R6 pairings to default sequential placeholders
+  const defaultGroups=[[0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15],[16,17,18,19]];
+  for(const r of [3,6]){
+    for(let gi=0;gi<5;gi++){
+      await sb.from('pairings').upsert({round:r,group_num:gi+1,tee_time:'',player_indices:defaultGroups[gi]},{onConflict:'round,group_num'});
+    }
+  }
+  teamComp={team_a_name:'Team A',team_b_name:'Team B',team_a_captain_id:null,team_b_captain_id:null};
+  teamPlayers={};
+  teamMatches={};
+  await loadAll();
+  if(document.getElementById('tab-team').classList.contains('active'))renderTeamCup();
+  if(document.getElementById('tab-pairings').classList.contains('active'))renderPairings(curPairR);
+  showToast('✓ Team Cup reset to blank!');
+}
+
+async function resetEverything(){
+  if(!confirm('⚠️⚠️ FULL RESET: This wipes ALL scores, ALL round results, the shootout, AND the entire Team Cup setup (captains, teams, R3/R6 lineups). Pairings for R1/R2/R4/R5 stay intact. This cannot be undone. Continue?')) return;
+  if(!confirm('This is your last chance to cancel. Reset everything and start completely fresh?')) return;
+  showToast('Resetting everything...');
+  await Promise.all([
+    sb.from('hole_scores').delete().neq('id',0),
+    sb.from('round_results').delete().neq('id',0),
+    sb.from('team_results').delete().neq('id',0),
+    sb.from('shootout').delete().neq('id',0),
+    sb.from('team_competition').delete().neq('id',0),
+    sb.from('team_players').delete().neq('id',0),
+    sb.from('team_matches').delete().neq('id',0),
+  ]);
+  await sb.from('team_competition').insert({team_a_name:'Team A',team_b_name:'Team B'});
+  const defaultGroups=[[0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15],[16,17,18,19]];
+  for(const r of [3,6]){
+    for(let gi=0;gi<5;gi++){
+      await sb.from('pairings').upsert({round:r,group_num:gi+1,tee_time:'',player_indices:defaultGroups[gi]},{onConflict:'round,group_num'});
+    }
+  }
+  holeScores={};roundResults={};shootoutSt={};
+  teamComp={team_a_name:'Team A',team_b_name:'Team B',team_a_captain_id:null,team_b_captain_id:null};
+  teamPlayers={};
+  teamMatches={};
+  await loadAll();
+  renderLB();renderShootout();renderScoringAdmin();
+  if(document.getElementById('tab-scorecard').classList.contains('active'))renderSC(curSCR);
+  if(document.getElementById('tab-myscores').classList.contains('active'))renderMyScores(curMyR);
+  if(document.getElementById('tab-team').classList.contains('active'))renderTeamCup();
+  if(document.getElementById('tab-pairings').classList.contains('active'))renderPairings(curPairR);
+  showToast('✓ Everything reset! Ready for a fresh start.');
+}
+
 // ===================== POINTS ENGINE =====================
 
 // Helper: get a golfer's gross total for a round from hole_scores
@@ -2469,11 +2528,22 @@ function renderScoringAdmin(){
     </div>
     <div class="card-body">
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Use these to wipe test scores before the real tournament. All actions require double confirmation and cannot be undone.</p>
+
+      <div class="flex-gap" style="margin-bottom:14px;">
+        <button class="btn btn-sm" onclick="resetEverything()" style="background:#3a0a0a;color:#ffcccc;border:2px solid #8b1a1a;padding:10px 20px;border-radius:2px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">
+          ⚠️⚠️ Reset Everything (Scores + Team Cup)
+        </button>
+      </div>
+
       <div class="flex-gap" style="margin-bottom:12px;">
         <button class="btn btn-sm" onclick="resetAllScores()" style="background:#8b1a1a;color:#fff;border:none;padding:8px 18px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">
           ⚠️ Wipe ALL Scores (All Rounds)
         </button>
+        <button class="btn btn-sm" onclick="resetTeamCup()" style="background:#8b1a1a;color:#fff;border:none;padding:8px 18px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">
+          ⚠️ Reset Team Cup Only (Captains/Teams/R3+R6 Lineups)
+        </button>
       </div>
+
       <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Or clear individual rounds:</p>
       <div class="flex-gap">
         ${[1,2,3,4,5,6].map(r=>`<button class="btn btn-sm" onclick="resetRoundScores(${r})" style="background:var(--parchment);color:#8b1a1a;border:1px solid #f1aeb5;padding:6px 12px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Clear R${r}</button>`).join('')}
