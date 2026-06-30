@@ -991,7 +991,8 @@ function renderMyScores(r){
     // Match status
     const latestStatus=isMatchRound&&matchData?(matchData.runningStatus.filter(s=>s!==null).slice(-1)[0]||null):null;
 
-    html+=`<td class="tot-cell">${tot||'—'}</td>
+    html+=`<td class="tot-cell">${bk||'—'}</td>
+      <td class="tot-cell">${tot||'—'}</td>
       <td class="tot-cell">${net?Math.round(net):'—'}</td>
       ${isR1?`<td class="tot-cell" style="background:#f0e8d0;font-weight:700;color:var(--navy);">${sfTot||'—'}</td>
       <td class="tot-cell" style="${vsQ>0?'background:#0a2e18;color:#70d490;':vsQ<0?'background:#3a0a0a;color:#f08080;':'background:#1a2e50;color:#b8d0f8;'}font-weight:700;">${vsQ!==null?(vsQ>0?'+':'')+vsQ:'—'}</td>`:''}
@@ -1517,7 +1518,7 @@ function _renderTeamSC(r,div,myGroupOnly=false){
       if(canEdit) html+=`<td style="padding:2px;"><input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="saveTeamHole(${r},${gi},${h},this.value,this)"></td>`;
       else html+=`<td style="padding:2px;"><input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></td>`;
     });
-    html+=`<td class="tot-cell">${tot||'—'}</td>`;
+    html+=`<td class="tot-cell">${bk||'—'}</td><td class="tot-cell">${tot||'—'}</td>`;
     if(isShamble) html+=`<td class="tot-cell" style="font-weight:700;">${net!==null?net:'—'}</td>`;
     html+=`<td class="tot-cell">${place?`${place}${ord(place)}`:tot?'?':'—'}</td>`;
     html+=`<td class="tot-cell">${dbi!==null?`<span class="pts-chip">${dbi}</span>`:tot?'<span style="font-size:11px;color:var(--text-muted);">pending</span>':'—'}</td>`;
@@ -1640,7 +1641,7 @@ function _renderR6TeamSC(div, myGroupOnly){
       if(canEditA) html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="saveR6TeamHole(${gi},'A',${h},this.value,this)"></div></td>`;
       else html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></div></td>`;
     });
-    html+=`<td class="tot-cell">${(fA+bkA)||'—'}</td></tr>`;
+    html+=`<td class="tot-cell">${bkA||'—'}</td><td class="tot-cell">${(fA+bkA)||'—'}</td></tr>`;
 
     // Result row
     html+=`<tr style="background:#f8f4ec;">
@@ -1667,7 +1668,7 @@ function _renderR6TeamSC(div, myGroupOnly){
       if(canEditB) html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="saveR6TeamHole(${gi},'B',${h},this.value,this)"></div></td>`;
       else html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></div></td>`;
     });
-    html+=`<td class="tot-cell">${(fB+bkB)||'—'}</td></tr>`;
+    html+=`<td class="tot-cell">${bkB||'—'}</td><td class="tot-cell">${(fB+bkB)||'—'}</td></tr>`;
 
     html+=`</tbody></table></div>
     <div style="padding:10px 14px;background:var(--parchment);border-top:1px solid var(--border);display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
@@ -1988,7 +1989,7 @@ function _renderSC(r,div){
     }
     const quota=38-parseFloat(g.hdcp);
     const vsQ=r===1&&sfTot?(sfTot-quota):null;
-    html+=`<td class="tot-cell">${tot||'—'}</td><td class="tot-cell">${net?Math.round(net):'—'}</td>
+    html+=`<td class="tot-cell">${bk||'—'}</td><td class="tot-cell">${tot||'—'}</td><td class="tot-cell">${net?Math.round(net):'—'}</td>
       ${r===1?`<td class="tot-cell" style="background:#f0e8d0;font-weight:700;color:var(--navy);">${sfTot||'—'}</td>
       <td class="tot-cell" style="${vsQ>0?'background:#0a2e18;color:#70d490;':vsQ<0?'background:#3a0a0a;color:#f08080;':'background:#1a2e50;color:#b8d0f8;'}font-weight:700;">${vsQ!==null?(vsQ>0?'+':'')+vsQ:'—'}</td>`:''}
       ${isMatchRound&&matchData?`<td class="tot-cell" style="background:#0e1e38;padding:3px 4px;">
