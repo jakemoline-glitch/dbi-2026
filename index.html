@@ -319,6 +319,7 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
     <div class="card-header"><span>Shootout Field — Top 10</span></div>
     <div id="shootout-list" style="padding:0;"></div>
   </div>
+  <div id="shootout-scorecard-wrap"></div>
 </div>
 
 <!-- GOLFERS -->
@@ -529,6 +530,7 @@ const RNAMES=['','Modified Stableford','4-Person Scramble','2v2 Best Ball Match 
 const RVENUES=['','Wild Horse','Wild Horse','Bayside','Bayside','Wild Horse','Wild Horse'];
 
 let ME=null,golfers=[],holeScores={},roundResults={},pairingsData={},shootoutSt={};
+let shootoutHoleScores={}; // {golfer_id: {hole: score}}
 let teamComp={team_a_name:'Team A',team_b_name:'Team B',team_a_captain_id:null,team_b_captain_id:null};
 let teamPlayers={}; // {golfer_id: 'A'|'B'}
 let teamMatches={}; // {round: {match_num: {a1,a2,b1,b2}}}
@@ -642,7 +644,7 @@ async function loadAll(){
     return {data:allRows, error:null};
   }
 
-  const [hs,rr,pr,so,tc,tp,tm]=await Promise.all([
+  const [hs,rr,pr,so,tc,tp,tm,shs]=await Promise.all([
     fetchAllHoleScores(),
     sb.from('round_results').select('*'),
     sb.from('pairings').select('*').order('group_num'),
@@ -650,9 +652,10 @@ async function loadAll(){
     sb.from('team_competition').select('*').limit(1),
     sb.from('team_players').select('*'),
     sb.from('team_matches').select('*'),
+    sb.from('shootout_hole_scores').select('*'),
   ]);
   // Surface any load errors instead of silently showing empty data
-  const loadErrors=[hs,rr,pr,so,tc,tp,tm].filter(r=>r.error).map(r=>r.error.message);
+  const loadErrors=[hs,rr,pr,so,tc,tp,tm,shs].filter(r=>r.error).map(r=>r.error.message);
   if(loadErrors.length){
     console.error('loadAll errors:',loadErrors);
     showToast(`⚠️ Some data failed to load: ${loadErrors[0]}`);
@@ -711,6 +714,11 @@ async function loadAll(){
   (rr.data||[]).forEach(r=>{if(!roundResults[r.round])roundResults[r.round]={};roundResults[r.round][r.golfer_id]=r;});
   shootoutSt={};
   (so.data||[]).forEach(s=>{shootoutSt[s.golfer_id]=s;});
+  shootoutHoleScores={};
+  (shs.data||[]).forEach(s=>{
+    if(!shootoutHoleScores[s.golfer_id]) shootoutHoleScores[s.golfer_id]={};
+    shootoutHoleScores[s.golfer_id][s.hole]=s.gross_score;
+  });
   // Team competition
   if(tc.data&&tc.data[0]) teamComp=tc.data[0];
   teamPlayers={};
@@ -766,6 +774,12 @@ function setupRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'shootout'},async()=>{
       const {data}=await sb.from('shootout').select('*');
       shootoutSt={};(data||[]).forEach(s=>{shootoutSt[s.golfer_id]=s;});renderShootout();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'shootout_hole_scores'},async()=>{
+      const {data}=await sb.from('shootout_hole_scores').select('*');
+      shootoutHoleScores={};
+      (data||[]).forEach(s=>{if(!shootoutHoleScores[s.golfer_id])shootoutHoleScores[s.golfer_id]={};shootoutHoleScores[s.golfer_id][s.hole]=s.gross_score;});
+      if(document.getElementById('tab-shootout').classList.contains('active'))renderShootout();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'pairings'},async()=>{
       const {data}=await sb.from('pairings').select('*').order('group_num');
@@ -2196,6 +2210,128 @@ function renderShootout(){
   }).join('');
   if(!html)html=`<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">Complete scoring to determine the shootout field.</div>`;
   document.getElementById('shootout-list').innerHTML=html;
+
+  // Render the 7-hole scorecard for the qualified field
+  renderShootoutScorecard(top10);
+}
+
+function renderShootoutScorecard(top10){
+  const wrap=document.getElementById('shootout-scorecard-wrap');
+  if(!wrap) return;
+  if(!top10.length){ wrap.innerHTML=''; return; }
+
+  const par=WILD_HORSE.par.slice(0,7);
+  const hdcpIdx=WILD_HORSE.hdcp.slice(0,7);
+  const entHole=s=>s<4?1:s<6?2:s<8?3:s===8?4:5;
+  const mulls=hdcp=>hdcp>=24?2:hdcp>=20?1:0;
+
+  let html=`
+  <div style="display:flex;align-items:center;gap:8px;margin:18px 0 10px;">
+    <span style="color:#b8965a;font-size:13px;">●</span>
+    <span style="font-size:11px;color:rgba(255,255,255,0.5);">1 stroke</span>
+    <span style="color:#b8965a;font-size:13px;margin-left:8px;">●●</span>
+    <span style="font-size:11px;color:rgba(255,255,255,0.5);">2 strokes (full handicap, Wild Horse holes 1–7)</span>
+  </div>
+  <div class="card">
+    <div class="card-header"><span>Shootout Scorecard — First 7 Holes, Wild Horse</span><span class="badge">Top 10</span></div>
+    <div class="scorecard-wrap"><table class="sc"><thead>
+      <tr>
+        <th class="nc">Golfer</th><th>HCP</th>
+        ${par.map((_,i)=>`<th>${i+1}</th>`).join('')}
+        <th>TOT</th><th>+/-</th>
+      </tr>
+      <tr class="par-row">
+        <td class="nc" style="font-weight:700;color:var(--navy);">Par</td><td></td>
+        ${par.map(p=>`<td>${p}</td>`).join('')}
+        <td class="tot-cell">${par.reduce((a,b)=>a+b,0)}</td><td></td>
+      </tr>
+      <tr class="par-row">
+        <td class="nc" style="color:var(--text-muted);">HCP Index</td><td></td>
+        ${hdcpIdx.map(h=>`<td style="font-size:9px;color:var(--text-muted);">${h}</td>`).join('')}
+        <td class="tot-cell"></td><td></td>
+      </tr>
+    </thead><tbody>`;
+
+  top10.forEach((g,seed)=>{
+    const sc=shootoutHoleScores[g.id]||{};
+    const isMe=g.id===ME?.id;
+    const canEdit=IS_ADMIN||isMe;
+    const so=shootoutSt[g.id];
+    const status=so?.status||'active';
+    const isEliminated=status==='eliminated';
+    const rowStyle=isMe?'me-row':canEdit?'can-edit-row':'';
+    const enters=entHole(seed);
+
+    const tot=par.reduce((sum,_,i)=>sum+(sc[i+1]||0),0);
+    const playedCount=Object.keys(sc).filter(h=>sc[h]).length;
+    const toPar=playedCount?tot-par.slice(0,playedCount).reduce((a,b)=>a+b,0):null;
+
+    html+=`<tr class="${rowStyle}" style="${isEliminated?'opacity:0.45;':''}">
+      <td class="nc">${g.name}${isMe?' ★':''}${status==='champion'?' 🏆':isEliminated?' ❌':''}</td>
+      <td style="font-size:11px;">${g.hdcp}</td>`;
+
+    par.forEach((p,i)=>{
+      const h=i+1;
+      const v=sc[h]||'';
+      const cl=v?holeColor(v,p):'';
+      const strokes=getStrokes(g.hdcp,hdcpIdx[i],1.0);
+      const isBeforeEntry=h<enters;
+      if(isBeforeEntry){
+        html+=`<td style="padding:2px;background:#f4f0e6;"><span style="font-size:9px;color:var(--text-light);">—</span></td>`;
+      } else if(canEdit && !isEliminated){
+        html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="onShootoutHoleInput(this,${g.id},${h},${i})"></div></td>`;
+      } else {
+        html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></div></td>`;
+      }
+    });
+
+    html+=`<td class="tot-cell">${tot||'—'}</td>
+      <td class="tot-cell" style="color:${toPar===0?'var(--navy)':toPar>0?'var(--red)':'#0a5c36'};">${toPar!==null?(toPar>0?'+':'')+toPar:'—'}</td>
+    </tr>`;
+  });
+
+  html+=`</tbody></table></div>
+    <div style="padding:10px 14px;background:var(--parchment);border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
+      Grayed cells (—) are holes before that golfer's entry point. Eliminated golfers are dimmed but scores remain visible.
+    </div>
+  </div>`;
+
+  wrap.innerHTML=html;
+}
+
+function onShootoutHoleInput(inp,golferId,hole,parIdx){
+  const par=WILD_HORSE.par[parIdx];
+  const v=parseInt(inp.value);
+  inp.className='sc-hi'+(v?' '+holeColor(v,par):'');
+  if(!shootoutHoleScores[golferId]) shootoutHoleScores[golferId]={};
+  if(v>=1) shootoutHoleScores[golferId][hole]=v;
+  else delete shootoutHoleScores[golferId][hole];
+  markUnsaved(inp);
+
+  clearTimeout(saveTimers[`so_${golferId}_${hole}`]);
+  saveTimers[`so_${golferId}_${hole}`]=setTimeout(async()=>{
+    if(!v||v<1) return;
+    const {error}=await sb.from('shootout_hole_scores').upsert(
+      {golfer_id:golferId, hole, gross_score:v},
+      {onConflict:'golfer_id,hole'}
+    );
+    if(error){
+      console.error('shootout hole save error:',error,{golferId,hole,v});
+      markSaveFailed(inp, error.message);
+      showToast(`⚠️ Save failed: ${error.message}`);
+      return;
+    }
+    markSaved(inp);
+  },700);
+
+  // Refresh totals without full re-render flicker
+  clearTimeout(saveTimers['so_totals_render']);
+  saveTimers['so_totals_render']=setTimeout(()=>{
+    if(document.getElementById('tab-shootout')?.classList.contains('active')){
+      const ranked=golfers.map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total);
+      renderShootoutScorecard(ranked.slice(0,10));
+    }
+  },150);
 }
 
 async function cycleSOStatus(gid,cur){
@@ -2248,8 +2384,9 @@ async function resetAllScores(){
     sb.from('round_results').delete().neq('id',0),
     sb.from('team_results').delete().neq('id',0),
     sb.from('shootout').delete().neq('id',0),
+    sb.from('shootout_hole_scores').delete().neq('id',0),
   ]);
-  holeScores={};roundResults={};shootoutSt={};
+  holeScores={};roundResults={};shootoutSt={};shootoutHoleScores={};
   renderLB();renderShootout();
   if(document.getElementById('tab-scorecard').classList.contains('active'))renderSC(curSCR);
   if(document.getElementById('tab-myscores').classList.contains('active'))renderMyScores(curMyR);
@@ -2307,6 +2444,7 @@ async function resetEverything(){
     sb.from('round_results').delete().neq('id',0),
     sb.from('team_results').delete().neq('id',0),
     sb.from('shootout').delete().neq('id',0),
+    sb.from('shootout_hole_scores').delete().neq('id',0),
     sb.from('team_competition').delete().neq('id',0),
     sb.from('team_players').delete().neq('id',0),
     sb.from('team_matches').delete().neq('id',0),
@@ -2318,7 +2456,7 @@ async function resetEverything(){
       await sb.from('pairings').upsert({round:r,group_num:gi+1,tee_time:'',player_indices:defaultGroups[gi]},{onConflict:'round,group_num'});
     }
   }
-  holeScores={};roundResults={};shootoutSt={};
+  holeScores={};roundResults={};shootoutSt={};shootoutHoleScores={};
   teamComp={team_a_name:'Team A',team_b_name:'Team B',team_a_captain_id:null,team_b_captain_id:null};
   teamPlayers={};
   teamMatches={};
