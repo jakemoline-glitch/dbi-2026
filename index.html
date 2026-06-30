@@ -593,8 +593,26 @@ async function enterApp(){
 }
 
 async function loadAll(){
+  // hole_scores can exceed Supabase's default 1000-row response cap, so paginate explicitly
+  const fetchAllRows=async(table, extraFilters)=>{
+    let allRows=[];
+    let from=0;
+    const pageSize=1000;
+    while(true){
+      let q=sb.from(table).select('*').range(from, from+pageSize-1);
+      if(extraFilters) q=extraFilters(q);
+      const {data, error}=await q;
+      if(error) return {data:allRows, error};
+      if(!data || data.length===0) break;
+      allRows=allRows.concat(data);
+      if(data.length<pageSize) break; // last page
+      from+=pageSize;
+    }
+    return {data:allRows, error:null};
+  };
+
   const [hs,rr,pr,so,tc,tp,tm]=await Promise.all([
-    sb.from('hole_scores').select('*'),
+    fetchAllRows('hole_scores'),
     sb.from('round_results').select('*'),
     sb.from('pairings').select('*').order('group_num'),
     sb.from('shootout').select('*'),
