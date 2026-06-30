@@ -593,26 +593,35 @@ async function enterApp(){
 }
 
 async function loadAll(){
-  // hole_scores can exceed Supabase's default 1000-row response cap, so paginate explicitly
-  const fetchAllRows=async(table, extraFilters)=>{
+  // hole_scores can exceed Supabase's default row response cap, so paginate explicitly.
+  // Using a small, safe page size to work regardless of the project's configured max-rows setting.
+  async function fetchAllHoleScores(){
     let allRows=[];
     let from=0;
-    const pageSize=1000;
+    const pageSize=500;
+    let page=0;
     while(true){
-      let q=sb.from(table).select('*').range(from, from+pageSize-1);
-      if(extraFilters) q=extraFilters(q);
-      const {data, error}=await q;
-      if(error) return {data:allRows, error};
-      if(!data || data.length===0) break;
+      const to=from+pageSize-1;
+      const {data, error}=await sb.from('hole_scores').select('*').order('id',{ascending:true}).range(from, to);
+      if(error){
+        console.error('fetchAllHoleScores error on page',page,error);
+        return {data:allRows, error};
+      }
+      const got=data?data.length:0;
+      console.log(`hole_scores page ${page}: requested ${from}-${to}, got ${got} rows`);
+      if(got===0) break;
       allRows=allRows.concat(data);
-      if(data.length<pageSize) break; // last page
+      if(got<pageSize) break; // last page reached
       from+=pageSize;
+      page++;
+      if(page>20) { console.warn('fetchAllHoleScores: stopped after 20 pages as a safety limit'); break; }
     }
+    console.log(`fetchAllHoleScores TOTAL: ${allRows.length} rows`);
     return {data:allRows, error:null};
-  };
+  }
 
   const [hs,rr,pr,so,tc,tp,tm]=await Promise.all([
-    fetchAllRows('hole_scores'),
+    fetchAllHoleScores(),
     sb.from('round_results').select('*'),
     sb.from('pairings').select('*').order('group_num'),
     sb.from('shootout').select('*'),
