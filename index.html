@@ -386,7 +386,7 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
     <div class="pl"><div class="pl-item">1st→16 pts</div><div class="pl-item">2nd→15</div><div class="pl-item">3rd→14</div><div class="pl-item">↓ -1 per place</div></div>
   </div></div>
   <div class="card"><div class="card-header"><span>Round 6</span><span class="badge">Wild Horse · Wed PM</span></div><div class="card-body">
-    <p style="font-size:13px;"><strong>2v2 Scramble Match Play — Nassau.</strong> A-Player uses 70% HDCP · B-Player uses 30% HDCP. Lowest 2-person scramble net score wins each hole.</p>
+    <p style="font-size:13px;"><strong>2v2 Scramble Match Play — Nassau.</strong> One ball, one score per hole per team. Combined team HDCP = A-Player (70%) + B-Player (30%). Lower combined HDCP team gives strokes to the higher combined HDCP team, allocated by hole difficulty. Lower net score on each hole wins.</p>
     <div class="pl"><div class="pl-item">Front 9 Win→3 pts</div><div class="pl-item">Back 9 Win→3</div><div class="pl-item">Total Win→3</div><div class="pl-item">Winning team bonus→3</div></div>
   </div></div>
   <div class="card"><div class="card-header" style="background:var(--gold);color:var(--dark);"><span>🎯 Shootout</span><span class="badge" style="background:var(--dark);color:var(--gold);">Wed 7pm</span></div><div class="card-body">
@@ -602,18 +602,49 @@ async function loadAll(){
     sb.from('team_players').select('*'),
     sb.from('team_matches').select('*'),
   ]);
+  // Parse pairings FIRST so hole score team-lookups work correctly
+  pairingsData={};
+  (pr.data||[]).forEach(p=>{if(!pairingsData[p.round])pairingsData[p.round]=[];pairingsData[p.round].push(p);});
+
   holeScores={};
   (hs.data||[]).forEach(s=>{
     if(!holeScores[s.round])holeScores[s.round]={};
-    if(s.hole>100){
-      // Team score — find which group this golfer belongs to
+    if(s.hole>300){
+      // Round 6 Team B scramble score (offset 300)
+      const realHole=s.hole-300;
+      const golferIdx=golfers.findIndex(g=>g.id===s.golfer_id);
+      const grps=pairingsData[s.round]||[];
+      grps.forEach((grp,gi)=>{
+        const pi=grp.player_indices||[];
+        if(pi.slice(2,4).includes(golferIdx)){
+          const teamKey=`r6team_${gi}_B`;
+          if(!holeScores[s.round][teamKey])holeScores[s.round][teamKey]={};
+          holeScores[s.round][teamKey][realHole]=s.gross_score;
+        }
+      });
+    } else if(s.hole>200){
+      // Round 6 Team A scramble score (offset 200)
+      const realHole=s.hole-200;
+      const golferIdx=golfers.findIndex(g=>g.id===s.golfer_id);
+      const grps=pairingsData[s.round]||[];
+      grps.forEach((grp,gi)=>{
+        const pi=grp.player_indices||[];
+        if(pi.slice(0,2).includes(golferIdx)){
+          const teamKey=`r6team_${gi}_A`;
+          if(!holeScores[s.round][teamKey])holeScores[s.round][teamKey]={};
+          holeScores[s.round][teamKey][realHole]=s.gross_score;
+        }
+      });
+    } else if(s.hole>100){
+      // Round 2 team scramble score (offset 100)
+      const realHole=s.hole-100;
       const golferIdx=golfers.findIndex(g=>g.id===s.golfer_id);
       const grps=pairingsData[s.round]||[];
       grps.forEach((grp,gi)=>{
         if((grp.player_indices||[]).includes(golferIdx)){
           const teamKey=`team_${gi}`;
           if(!holeScores[s.round][teamKey])holeScores[s.round][teamKey]={};
-          holeScores[s.round][teamKey][s.hole-100]=s.gross_score;
+          holeScores[s.round][teamKey][realHole]=s.gross_score;
         }
       });
     } else {
@@ -623,8 +654,6 @@ async function loadAll(){
   });
   roundResults={};
   (rr.data||[]).forEach(r=>{if(!roundResults[r.round])roundResults[r.round]={};roundResults[r.round][r.golfer_id]=r;});
-  pairingsData={};
-  (pr.data||[]).forEach(p=>{if(!pairingsData[p.round])pairingsData[p.round]=[];pairingsData[p.round].push(p);});
   shootoutSt={};
   (so.data||[]).forEach(s=>{shootoutSt[s.golfer_id]=s;});
   // Team competition
@@ -636,12 +665,12 @@ async function loadAll(){
     if(!teamMatches[m.round])teamMatches[m.round]={};
     teamMatches[m.round][m.match_num]={a1:m.a1_golfer_id,a2:m.a2_golfer_id,b1:m.b1_golfer_id,b2:m.b2_golfer_id};
   });
-  // Load team hole scores from localStorage for R2/R4
-  [2,4].forEach(r=>{
+  // Load team hole scores from localStorage for R2 (backup/legacy)
+  [2].forEach(r=>{
     if(!holeScores[r]) holeScores[r]={};
     for(let gi=0;gi<5;gi++){
       const saved=localStorage.getItem(`dbi26_team_${r}_${gi}`);
-      if(saved) holeScores[r][`team_${gi}`]=JSON.parse(saved);
+      if(saved&&!holeScores[r][`team_${gi}`]) holeScores[r][`team_${gi}`]=JSON.parse(saved);
     }
   });
   // Sync team matches into pairings data for R3/R6
@@ -1090,25 +1119,13 @@ function strokeDot(n){ return ''; }
 // For R6 match play: player 0&1 in a group = A(70%), players 2&3 = B(30%)
 function getHdcpPct(r, golferIdx){
   if(r===4) return 0.8; // Shamble
-  if(r===6){
-    // Find which slot this golfer occupies in their R6 group
-    const grps=pairingsData[6]||[];
-    for(const g of grps){
-      const pi=g.player_indices||[];
-      const slot=pi.indexOf(golferIdx);
-      if(slot===0||slot===1) return 0.7; // A player
-      if(slot===2||slot===3) return 0.3; // B player
-    }
-    return 1.0;
-  }
-  return 1.0; // R1, R2, R3, R5 — full handicap
+  return 1.0; // R1, R2, R3, R5 — full handicap. R6 uses team combined handicap, not individual.
 }
 
-// Which rounds show stroke dots?
-// R1=quota based (show for reference), R3=match play net (critical), R4=shamble, R5=net, R6=match play
-const SHOW_STROKES_ROUNDS=[1,3,4,5,6];
+// Which rounds show stroke dots on individual scorecards?
+const SHOW_STROKES_ROUNDS=[1,3,4,5];
 const MATCH_ROUNDS=[3,6];
-const TEAM_ROUNDS=[2]; // Only Round 2 (Scramble) uses a single team score. Round 4 (Shamble) uses individual scores.
+const TEAM_ROUNDS=[2,6]; // Single team score per group: R2 (Scramble), R6 (Scramble Match Play)
 
 // ===================== MATCH PLAY ENGINE =====================
 
@@ -1124,6 +1141,21 @@ function getNetScore(golferId, hole, r, hdcpPct){
 }
 
 // Get the golfer IDs and hdcp percentages for each team in a match group
+// Calculate a team's combined handicap for Round 6 scramble (A-player 70% + B-player 30%)
+function getTeamCombinedHdcp(player1Hdcp, player2Hdcp){
+  return Math.round(parseFloat(player1Hdcp)*0.7) + Math.round(parseFloat(player2Hdcp)*0.3);
+}
+
+// Get which holes a team receives strokes on, based on the handicap DIFFERENCE between the two teams
+// Returns strokes received (0 or 1, occasionally 2 for big differences) for a specific hole
+function getTeamStrokesOnHole(teamHdcp, oppTeamHdcp, holeHdcpIndex){
+  const diff=teamHdcp-oppTeamHdcp;
+  if(diff<=0) return 0; // this team doesn't get strokes (their combined hdcp is lower or equal)
+  const fullRounds=Math.floor(diff/18);
+  const remainder=diff%18;
+  return fullRounds + (holeHdcpIndex<=remainder?1:0);
+}
+
 function getMatchTeams(r, groupIdx){
   const grp=(pairingsData[r]||[])[groupIdx];
   if(!grp) return null;
@@ -1134,6 +1166,7 @@ function getMatchTeams(r, groupIdx){
   if(r===3){
     // Best ball: Team A = slots 0,1 (full hdcp); Team B = slots 2,3 (full hdcp)
     return {
+      format:'bestball',
       teamA: pi.slice(0,2).map(i=>({id:golfers[i]?.id, pct:1.0, idx:i})).filter(x=>x.id),
       teamB: pi.slice(2,4).map(i=>({id:golfers[i]?.id, pct:1.0, idx:i})).filter(x=>x.id),
       nameA: pi.slice(0,2).map(i=>golfers[i]?.name?.split(' ')[0]||'?').join(' & '),
@@ -1141,15 +1174,31 @@ function getMatchTeams(r, groupIdx){
     };
   }
   if(r===6){
-    // Scramble: Team A = slots 0(70%),1(30%); Team B = slots 2(70%),3(30%)
+    // Scramble: ONE team score per hole. Combined team handicap = A(70%) + B(30%)
+    const aP1=golfers[pi[0]], aP2=golfers[pi[1]], bP1=golfers[pi[2]], bP2=golfers[pi[3]];
+    const teamAHdcp=getTeamCombinedHdcp(aP1?.hdcp||0, aP2?.hdcp||0);
+    const teamBHdcp=getTeamCombinedHdcp(bP1?.hdcp||0, bP2?.hdcp||0);
     return {
-      teamA: [{id:golfers[pi[0]]?.id, pct:0.7, idx:pi[0]},{id:golfers[pi[1]]?.id, pct:0.3, idx:pi[1]}].filter(x=>x.id),
-      teamB: [{id:golfers[pi[2]]?.id, pct:0.7, idx:pi[2]},{id:golfers[pi[3]]?.id, pct:0.3, idx:pi[3]}].filter(x=>x.id),
-      nameA: `${golfers[pi[0]]?.name?.split(' ')[0]||'?'} & ${golfers[pi[1]]?.name?.split(' ')[0]||'?'}`,
-      nameB: `${golfers[pi[2]]?.name?.split(' ')[0]||'?'} & ${golfers[pi[3]]?.name?.split(' ')[0]||'?'}`,
+      format:'teamscramble',
+      teamAHdcp, teamBHdcp,
+      teamAGolferIds:[aP1?.id,aP2?.id].filter(Boolean),
+      teamBGolferIds:[bP1?.id,bP2?.id].filter(Boolean),
+      teamAIdx:[pi[0],pi[1]],
+      teamBIdx:[pi[2],pi[3]],
+      // for compatibility with existing team-detection code that checks .idx
+      teamA: [pi[0],pi[1]].map(i=>({idx:i})),
+      teamB: [pi[2],pi[3]].map(i=>({idx:i})),
+      nameA: `${aP1?.name?.split(' ')[0]||'?'} & ${aP2?.name?.split(' ')[0]||'?'}`,
+      nameB: `${bP1?.name?.split(' ')[0]||'?'} & ${bP2?.name?.split(' ')[0]||'?'}`,
     };
   }
   return null;
+}
+
+// Get team scramble score for a given hole (Round 6) — single score stored under a synthetic team key
+function getTeamScrambleScore(r, groupIdx, team, hole){
+  const teamKey=`r6team_${groupIdx}_${team}`;
+  return holeScores[r]?.[teamKey]?.[hole] ?? null;
 }
 
 // Calculate hole-by-hole match play results for a group
@@ -1157,9 +1206,27 @@ function getMatchTeams(r, groupIdx){
 function calcMatchHoles(r, groupIdx){
   const teams=getMatchTeams(r, groupIdx);
   if(!teams) return Array(18).fill(null);
+
+  if(teams.format==='teamscramble'){
+    const course=ROUND_COURSE[r];
+    return Array.from({length:18},(_,i)=>{
+      const h=i+1;
+      const grossA=getTeamScrambleScore(r,groupIdx,'A',h);
+      const grossB=getTeamScrambleScore(r,groupIdx,'B',h);
+      if(grossA===null||grossB===null) return null;
+      const strokesA=getTeamStrokesOnHole(teams.teamAHdcp,teams.teamBHdcp,course.hdcp[h-1]);
+      const strokesB=getTeamStrokesOnHole(teams.teamBHdcp,teams.teamAHdcp,course.hdcp[h-1]);
+      const netA=grossA-strokesA;
+      const netB=grossB-strokesB;
+      if(netA<netB) return 'A';
+      if(netB<netA) return 'B';
+      return 'H';
+    });
+  }
+
+  // Best ball format (Round 3)
   return Array.from({length:18},(_,i)=>{
     const h=i+1;
-    // Best net score from each team
     const netsA=teams.teamA.map(p=>getNetScore(p.id,h,r,p.pct)).filter(n=>n!==null);
     const netsB=teams.teamB.map(p=>getNetScore(p.id,h,r,p.pct)).filter(n=>n!==null);
     if(!netsA.length||!netsB.length) return null;
@@ -1245,6 +1312,8 @@ function renderSC(r){
 
 // Team scorecard for R2 (Scramble) and R4 (Shamble)
 function _renderTeamSC(r,div,myGroupOnly=false){
+  if(r===6){ _renderR6TeamSC(div,myGroupOnly); return; }
+
   const course=ROUND_COURSE[r];
   const par=course.par;
   const h18=Array.from({length:18},(_,i)=>i+1);
@@ -1370,6 +1439,196 @@ function _renderTeamSC(r,div,myGroupOnly=false){
   </div></div>`;
 
   div.innerHTML=html;
+}
+
+// ===================== ROUND 6 — TEAM SCRAMBLE MATCH PLAY =====================
+// Each match has Team A (1 score/hole) vs Team B (1 score/hole).
+// Combined team handicap = A-player(70%) + B-player(30%), rounded individually then summed.
+// The team with the LOWER combined handicap gives strokes to the team with the HIGHER combined handicap.
+
+function _renderR6TeamSC(div, myGroupOnly){
+  const r=6;
+  const course=ROUND_COURSE[r];
+  const par=course.par;
+  const hdcpIndex=course.hdcp;
+  const h18=Array.from({length:18},(_,i)=>i+1);
+  const fPar=par.slice(0,9).reduce((a,b)=>a+b,0);
+  const bPar=par.slice(9).reduce((a,b)=>a+b,0);
+  const grps=pairingsData[6]||[];
+
+  const storedTee=localStorage.getItem(`dbi26_tee_r${r}`)||course.defaultTee;
+  const selTee=Object.keys(course.tees).includes(storedTee)?storedTee:course.defaultTee;
+  const teeData=course.tees[selTee];
+  const teeBtns=Object.keys(course.tees).map(t=>{
+    const td=course.tees[t]; const active=t===selTee;
+    return `<button onclick="switchTee(${r},'${t}')" style="padding:5px 12px;border-radius:2px;border:2px solid ${active?td.color:'var(--border)'};background:${active?td.color:'var(--white)'};color:${active?'#fff':'var(--text)'};font-family:'Inter',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">${t}</button>`;
+  }).join('');
+
+  const myGroupInfo=getMyGroup(6);
+  const myGroupIdx=myGroupInfo?.groupNum??-1;
+  const myIdx=golfers.findIndex(g=>g.id===ME?.id);
+
+  const matchesToShow=myGroupOnly
+    ? grps.map((g,gi)=>({g,gi})).filter(({gi})=>gi===myGroupIdx)
+    : grps.map((g,gi)=>({g,gi}));
+
+  let html=`
+  <div class="format-box"><strong>Round 6 @ ${course.name} — 2v2 Scramble Match Play</strong><br>
+    <span style="font-size:12px;">Team scramble — one ball, one score per hole, per team. Combined team handicap = A-player (70% HDCP) + B-player (30% HDCP). The team with the lower combined handicap gives strokes to the team with the higher combined handicap, allocated by hole difficulty.</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">${teeBtns}
+    <span style="font-size:12px;color:var(--text-muted);">Rating: <strong>${teeData.rating}</strong> · Slope: <strong>${teeData.slope}</strong></span>
+  </div>`;
+
+  matchesToShow.forEach(({g:grp,gi})=>{
+    const pi=grp.player_indices||[];
+    const teams=getMatchTeams(6,gi);
+    if(!teams||teams.format!=='teamscramble'){
+      html+=`<div class="card"><div class="card-body" style="font-size:13px;color:var(--text-muted);font-style:italic;">Match ${gi+1} — lineup not yet set.</div></div>`;
+      return;
+    }
+    const isMyMatch=pi.includes(myIdx);
+    const myTeam=pi.slice(0,2).includes(myIdx)?'A':pi.slice(2,4).includes(myIdx)?'B':null;
+    const canEditA=IS_ADMIN||myTeam==='A';
+    const canEditB=IS_ADMIN||myTeam==='B';
+
+    const scA=holeScores[6]?.[`r6team_${gi}_A`]||{};
+    const scB=holeScores[6]?.[`r6team_${gi}_B`]||{};
+    const fA=h18.slice(0,9).reduce((a,h)=>a+(scA[h]||0),0);
+    const bkA=h18.slice(9).reduce((a,h)=>a+(scA[h]||0),0);
+    const fB=h18.slice(0,9).reduce((a,h)=>a+(scB[h]||0),0);
+    const bkB=h18.slice(9).reduce((a,h)=>a+(scB[h]||0),0);
+
+    const holeResults=calcMatchHoles(6,gi);
+    const runningStatus=calcRunningStatus(holeResults);
+    const nassau=calcNassau(holeResults);
+    const latestStatus=runningStatus.filter(s=>s!==null).slice(-1)[0]||null;
+
+    html+=`<div class="card" style="margin-bottom:16px;">
+      <div class="card-header" style="justify-content:space-between;">
+        <span>Match ${gi+1}: <span style="color:#70d490;">${teams.nameA}</span> (HDCP ${teams.teamAHdcp}) <span style="color:rgba(255,255,255,0.4);">vs</span> <span style="color:#f08080;">${teams.nameB}</span> (HDCP ${teams.teamBHdcp})</span>
+        ${grp.tee_time?`<span class="badge">${grp.tee_time}</span>`:''}
+      </div>
+      <div class="scorecard-wrap"><table class="sc"><thead>
+        <tr><th class="nc">Team</th>
+          ${par.slice(0,9).map((_,i)=>`<th>${i+1}</th>`).join('')}
+          <th>OUT</th>
+          ${par.slice(9).map((_,i)=>`<th>${i+10}</th>`).join('')}
+          <th>IN</th><th>TOT</th>
+        </tr>
+        <tr class="par-row">
+          <td class="nc" style="font-weight:700;color:var(--navy);">Par</td>
+          ${par.slice(0,9).map(p=>`<td>${p}</td>`).join('')}
+          <td class="tot-cell">${fPar}</td>
+          ${par.slice(9).map(p=>`<td>${p}</td>`).join('')}
+          <td class="tot-cell">${bPar}</td><td class="tot-cell">${fPar+bPar}</td>
+        </tr>
+        <tr class="par-row">
+          <td class="nc" style="color:var(--text-muted);">HCP Index</td>
+          ${hdcpIndex.slice(0,9).map(h=>`<td style="font-size:10px;color:var(--text-muted);">${h}</td>`).join('')}
+          <td class="tot-cell"></td>
+          ${hdcpIndex.slice(9).map(h=>`<td style="font-size:10px;color:var(--text-muted);">${h}</td>`).join('')}
+          <td class="tot-cell"></td><td class="tot-cell"></td>
+        </tr>
+      </thead><tbody>`;
+
+    // Team A row
+    html+=`<tr style="${myTeam==='A'?'background:#f0f8f3;':''}">
+      <td class="nc" style="font-weight:700;color:#0a5c36;">${teams.nameA}${myTeam==='A'?' ★':''}</td>`;
+    h18.slice(0,9).forEach(h=>{
+      const v=scA[h]||''; const cl=v?holeColor(v,par[h-1]):'';
+      const strokes=getTeamStrokesOnHole(teams.teamAHdcp,teams.teamBHdcp,hdcpIndex[h-1]);
+      if(canEditA) html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="saveR6TeamHole(${gi},'A',${h},this.value,this)"></div></td>`;
+      else html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></div></td>`;
+    });
+    html+=`<td class="tot-cell">${fA||'—'}</td>`;
+    h18.slice(9).forEach(h=>{
+      const v=scA[h]||''; const cl=v?holeColor(v,par[h-1]):'';
+      const strokes=getTeamStrokesOnHole(teams.teamAHdcp,teams.teamBHdcp,hdcpIndex[h-1]);
+      if(canEditA) html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="saveR6TeamHole(${gi},'A',${h},this.value,this)"></div></td>`;
+      else html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></div></td>`;
+    });
+    html+=`<td class="tot-cell">${(fA+bkA)||'—'}</td></tr>`;
+
+    // Result row
+    html+=`<tr style="background:#f8f4ec;">
+      <td class="nc" style="font-size:10px;color:var(--text-muted);font-style:italic;">Hole Result</td>
+      ${holeResults.slice(0,9).map(res=>`<td style="text-align:center;padding:2px;">${holeResultChip(res,'A')}</td>`).join('')}
+      <td class="tot-cell"></td>
+      ${holeResults.slice(9).map(res=>`<td style="text-align:center;padding:2px;">${holeResultChip(res,'A')}</td>`).join('')}
+      <td class="tot-cell" style="background:#1e3560;padding:3px 4px;">${latestStatus?matchStatusBadge(latestStatus):''}</td>
+    </tr>`;
+
+    // Team B row
+    html+=`<tr style="${myTeam==='B'?'background:#f0f8f3;':''}">
+      <td class="nc" style="font-weight:700;color:#8b1a1a;">${teams.nameB}${myTeam==='B'?' ★':''}</td>`;
+    h18.slice(0,9).forEach(h=>{
+      const v=scB[h]||''; const cl=v?holeColor(v,par[h-1]):'';
+      const strokes=getTeamStrokesOnHole(teams.teamBHdcp,teams.teamAHdcp,hdcpIndex[h-1]);
+      if(canEditB) html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="saveR6TeamHole(${gi},'B',${h},this.value,this)"></div></td>`;
+      else html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></div></td>`;
+    });
+    html+=`<td class="tot-cell">${fB||'—'}</td>`;
+    h18.slice(9).forEach(h=>{
+      const v=scB[h]||''; const cl=v?holeColor(v,par[h-1]):'';
+      const strokes=getTeamStrokesOnHole(teams.teamBHdcp,teams.teamAHdcp,hdcpIndex[h-1]);
+      if(canEditB) html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="saveR6TeamHole(${gi},'B',${h},this.value,this)"></div></td>`;
+      else html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl} ro" type="number" value="${v}" readonly tabindex="-1"></div></td>`;
+    });
+    html+=`<td class="tot-cell">${(fB+bkB)||'—'}</td></tr>`;
+
+    html+=`</tbody></table></div>
+    <div style="padding:10px 14px;background:var(--parchment);border-top:1px solid var(--border);display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
+      <div class="tot-item"><div class="tot-lbl">Front 9</div><div class="tot-val" style="font-size:14px;">${nassau.frontPlayed?matchStatusBadge(nassau.frontLead===0?'AS':nassau.frontLead>0?`A${nassau.frontLead}UP`:`B${Math.abs(nassau.frontLead)}UP`):'—'}</div></div>
+      <div class="tot-item"><div class="tot-lbl">Back 9</div><div class="tot-val" style="font-size:14px;">${nassau.backPlayed?matchStatusBadge(nassau.backLead===0?'AS':nassau.backLead>0?`A${nassau.backLead}UP`:`B${Math.abs(nassau.backLead)}UP`):'—'}</div></div>
+      <div class="tot-item" style="border:2px solid var(--navy);"><div class="tot-lbl">Overall</div><div class="tot-val" style="font-size:14px;">${latestStatus?matchStatusBadge(latestStatus):'—'}</div></div>
+    </div></div>`;
+  });
+
+  if(IS_ADMIN){
+    html+=`<div style="margin-bottom:20px;"><button class="btn btn-gold btn-sm" onclick="runCalc(6)">⚡ Calculate &amp; Save Round 6 Points</button></div>`;
+  }
+
+  div.innerHTML=html;
+}
+
+function saveR6TeamHole(groupIdx,team,hole,val,inp){
+  const v=parseInt(val);
+  const par=ROUND_COURSE[6].par;
+  inp.className='sc-hi'+(v?' '+holeColor(v,par[hole-1]):'');
+  if(!holeScores[6]) holeScores[6]={};
+  const teamKey=`r6team_${groupIdx}_${team}`;
+  if(!holeScores[6][teamKey]) holeScores[6][teamKey]={};
+  if(v>=1) holeScores[6][teamKey][hole]=v;
+  else delete holeScores[6][teamKey][hole];
+
+  clearTimeout(saveTimers[`r6_${groupIdx}_${team}_${hole}`]);
+  saveTimers[`r6_${groupIdx}_${team}_${hole}`]=setTimeout(async()=>{
+    if(!v||v<1) return;
+    const grp=(pairingsData[6]||[])[groupIdx];
+    if(!grp) return;
+    const pi=grp.player_indices||[];
+    // Save under both players on that team so DB persists it (using hole+200 for team A, hole+300 for team B to avoid collision)
+    const offset=team==='A'?200:300;
+    const teamPlayerIdx=team==='A'?[pi[0],pi[1]]:[pi[2],pi[3]];
+    for(const pidx of teamPlayerIdx){
+      const gid=golfers[pidx]?.id;
+      if(!gid) continue;
+      await sb.from('hole_scores').upsert(
+        {round:6, golfer_id:gid, hole:hole+offset, gross_score:v},
+        {onConflict:'round,golfer_id,hole'}
+      );
+    }
+  },700);
+
+  // Debounced re-render to update match status
+  clearTimeout(saveTimers['r6render']);
+  saveTimers['r6render']=setTimeout(()=>{
+    const isMyScores=document.getElementById('tab-myscores')?.classList.contains('active');
+    const isSC=document.getElementById('tab-scorecard')?.classList.contains('active');
+    if(isMyScores) _renderR6TeamSC(document.getElementById('my-scores-content'),true);
+    if(isSC) _renderR6TeamSC(document.getElementById('scorecard-content'),false);
+  },1200);
 }
 
 function saveTeamHole(r,groupIdx,hole,val,inp){
@@ -2122,10 +2381,23 @@ async function calcRound6(){
     const pi=g.player_indices||[];
     const teamA=[golfers[pi[0]]?.id,golfers[pi[1]]?.id].filter(Boolean);
     const teamB=[golfers[pi[2]]?.id,golfers[pi[3]]?.id].filter(Boolean);
-    const front=document.getElementById(`r6f_${mi}`)?.value;
-    const back=document.getElementById(`r6b_${mi}`)?.value;
-    const total=document.getElementById(`r6t_${mi}`)?.value;
+
+    // Try auto-calculating from team scramble scores first
+    const holeResults=calcMatchHoles(6,mi);
+    const played=holeResults.filter(h=>h!==null).length;
+    let front,back,total;
+    if(played>0){
+      const nassau=calcNassau(holeResults);
+      front=nassau.front==='T'?'T':nassau.front;
+      back=nassau.back==='T'?'T':nassau.back;
+      total=nassau.overall==='T'?'T':nassau.overall;
+    }
+    // Fall back to manual dropdowns if no scorecard data
+    if(!front) front=document.getElementById(`r6f_${mi}`)?.value;
+    if(!back) back=document.getElementById(`r6b_${mi}`)?.value;
+    if(!total) total=document.getElementById(`r6t_${mi}`)?.value;
     if(!front&&!back&&!total)return;
+
     const ptsA={},ptsB={};
     teamA.forEach(id=>{ptsA[id]=0;});teamB.forEach(id=>{ptsB[id]=0;});
     [[front,3],[back,3],[total,3]].forEach(([w,pts])=>{
@@ -2136,10 +2408,10 @@ async function calcRound6(){
     const bTotal=teamB.reduce((s,id)=>s+ptsB[id],0);
     if(aTotal>bTotal)teamA.forEach(id=>ptsA[id]+=3);
     else if(bTotal>aTotal)teamB.forEach(id=>ptsB[id]+=3);
-    teamA.forEach(id=>results.push({golfer_id:id,dbi_points:ptsA[id],place:aTotal>=bTotal?1:2,notes:`Match ${mi+1}`}));
-    teamB.forEach(id=>results.push({golfer_id:id,dbi_points:ptsB[id],place:bTotal>aTotal?1:2,notes:`Match ${mi+1}`}));
+    teamA.forEach(id=>results.push({golfer_id:id,dbi_points:ptsA[id],place:aTotal>=bTotal?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
+    teamB.forEach(id=>results.push({golfer_id:id,dbi_points:ptsB[id],place:bTotal>aTotal?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
   });
-  if(results.length===0){showToast('Select Front/Back/Total winners in the scoring panel first.');return;}
+  if(results.length===0){showToast('No Round 6 scores found. Enter team scramble scores on the scorecards tab, or select winners manually below.');return;}
   await saveRoundResults(6,results);
   renderLB();renderMyScores(curMyR);
   return results;
@@ -2289,20 +2561,25 @@ function renderScoringAdmin(){
     <span>Round 6 — 2v2 Scramble Match Play Nassau</span>
     <button class="btn btn-gold btn-sm" onclick="runCalc(6)">⚡ Calculate &amp; Save Points</button>
   </div><div class="card-body">
-    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">A-player uses 70% HDCP, B-player uses 30% HDCP. Select the Nassau winner for each match (Team A = players 1&amp;2, Team B = players 3&amp;4):</p>
-    <table class="data-table"><thead><tr><th>Match</th><th>Team A (A+B)</th><th>Team B (A+B)</th><th>Front 9</th><th>Back 9</th><th>Total Match</th><th>DBI Pts</th></tr></thead><tbody>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Team scramble — one score per hole per team. Combined team HDCP = A-player (70%) + B-player (30%). Results auto-calculate from scorecard data entered on the scorecards tab; manual override available below if needed.</p>
+    <table class="data-table"><thead><tr><th>Match</th><th>Team A (Combined HDCP)</th><th>Team B (Combined HDCP)</th><th>Auto Status</th><th>Front 9 Override</th><th>Back 9 Override</th><th>Total Override</th><th>DBI Pts</th></tr></thead><tbody>
     ${(pairingsData[6]||Array(5).fill(null)).slice(0,5).map((g,mi)=>{
       const pi=g?.player_indices||[];
-      const fmt=(i,role)=>{const gf=golfers[i];return gf?`${gf.name.split(' ')[0]}(${role==='A'?Math.round(gf.hdcp*0.7):Math.round(gf.hdcp*0.3)})`:'-';};
-      const nameA=`${fmt(pi[0],'A')} & ${fmt(pi[1],'B')}`;
-      const nameB=`${fmt(pi[2],'A')} & ${fmt(pi[3],'B')}`;
+      const teams=getMatchTeams(6,mi);
+      const nameA=teams?`${teams.nameA} (${teams.teamAHdcp})`:'TBD';
+      const nameB=teams?`${teams.nameB} (${teams.teamBHdcp})`:'TBD';
       const ex=roundResults[6]?.[golfers[pi[0]]?.id];
       const exNote=ex?.notes||'';
       const exF=exNote.match(/Front:(\w+)/)?.[1]||'';
       const exB=exNote.match(/Back:(\w+)/)?.[1]||'';
       const exT=exNote.match(/Total:(\w+)/)?.[1]||'';
+      // Auto-calculated status from scorecard
+      const holeResults=teams?calcMatchHoles(6,mi):Array(18).fill(null);
+      const played=holeResults.filter(h=>h!==null).length;
+      const latestStatus=calcRunningStatus(holeResults).filter(s=>s!==null).slice(-1)[0];
+      const autoStatusHtml=played>0?`${matchStatusBadge(latestStatus)} <span style="font-size:10px;color:var(--text-muted);">(${played}/18 holes)</span>`:'<span style="font-size:11px;color:var(--text-muted);font-style:italic;">No scores yet</span>';
       const sel=(id,val)=>`<select id="${id}" style="border:1px solid var(--border);border-radius:2px;padding:4px 6px;font-size:13px;font-family:'Inter',sans-serif;">
-        <option value="">—</option>
+        <option value="">Auto</option>
         <option value="A" ${val==='A'?'selected':''}>Team A</option>
         <option value="B" ${val==='B'?'selected':''}>Team B</option>
         <option value="T" ${val==='T'?'selected':''}>Tie</option></select>`;
@@ -2310,7 +2587,8 @@ function renderScoringAdmin(){
       const rrB6=roundResults[6]?.[golfers[pi[2]]?.id];
       const dbi6=rrA6||rrB6?`A: <span class="pts-chip" style="font-size:10px;">${rrA6?.dbi_points??'?'}</span> B: <span class="pts-chip" style="font-size:10px;">${rrB6?.dbi_points??'?'}</span>`:'<span style="font-size:11px;color:var(--text-muted);">pending</span>';
       return `<tr><td><strong>Match ${mi+1}</strong></td>
-        <td style="font-size:11px;">${nameA}</td><td style="font-size:11px;">${nameB}</td>
+        <td style="font-size:12px;color:#0a5c36;">${nameA}</td><td style="font-size:12px;color:#8b1a1a;">${nameB}</td>
+        <td>${autoStatusHtml}</td>
         <td>${sel(`r6f_${mi}`,exF)}</td><td>${sel(`r6b_${mi}`,exB)}</td><td>${sel(`r6t_${mi}`,exT)}</td>
         <td>${dbi6}</td></tr>`;
     }).join('')}
