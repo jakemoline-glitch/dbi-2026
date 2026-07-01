@@ -486,19 +486,21 @@ const sb=supabase.createClient(SB_URL,SB_KEY);
 
 // ===================== COURSE DATA =====================
 // Wild Horse Golf Club — Gothenburg, NE (Par 72)
-// Source: Official Wild Horse scorecard PDF
+// Source: Official Wild Horse scorecard PDF (playwildhorse.com), verified June 2026
 const WILD_HORSE = {
   name: 'Wild Horse Golf Club',
   location: 'Gothenburg, NE',
-  par: [4,4,5,3,4,5,4,4,3, 4,3,4,3,5,4,4,5,4],
-  hdcp: [10,4,14,12,8,6,18,2,16, 5,17,9,11,15,7,1,13,3],
+  par:  [4,4,5,3,4,5,4,4,3, 4,3,4,3,5,4,4,5,4],
+  hdcp: [11,3,15,9,13,5,7,1,17, 10,18,4,6,16,12,2,14,8],
   tees: {
-    'Black': {yards:[537,171,367,548,405,364,451,414,328, 408,126,442,208,559,445,548,418,524], rating:73.7, slope:135, color:'#1a1a1a'},
-    'Gold':  {yards:[478,431,356,484,343,297,439,363,132, 382,113,393,191,490,418,370,505,362], rating:71.1, slope:126, color:'#c9a227'},
-    'Silver':{yards:[329,282,277,356,484,160,339,328,143, 290,79,327,126,454,307,380,474,337], rating:66.1, slope:110, color:'#888'},
-    'Green': {yards:[305,375,114,238,433,209,308,71,2303 ], rating:67.5, slope:109, color:'#2d6e47'}, // women
+    'Tips':         {yards:[405,478,537,171,367,548,364,451,185, 408,126,442,208,559,370,445,548,418], rating:73.9, slope:140, color:'#0a0a0a'},
+    'Gold':         {yards:[363,431,537,171,367,548,364,451,155, 408,126,442,208,524,342,445,548,418], rating:73.1, slope:138, color:'#c9a227'},
+    'Black':        {yards:[328,414,494,160,339,527,345,433,143, 362,120,393,191,490,307,418,505,384], rating:70.7, slope:133, color:'#1a1a1a'},
+    'Black/Silver': {yards:[328,356,494,160,339,484,345,343,143, 290,120,327,126,490,307,380,505,337], rating:68.3, slope:125, color:'#666666'},
+    'Silver':       {yards:[277,356,439,119,297,484,282,343,132, 290,113,327,126,454,280,380,420,337], rating:66.4, slope:113, color:'#999999'},
+    'Green':        {yards:[250,305,375,114,238,433,209,308,71, 249,74,311,109,416,234,313,390,289], rating:63.0, slope:106, color:'#2d6e47'},
   },
-  defaultTee: 'Gold',
+  defaultTee: 'Black',
 };
 
 // Bayside Golf Club — Brule, NE (Par 71/72 — front par 35 or 36 depending on hole 6 tee)
@@ -941,6 +943,7 @@ function renderMyScores(r){
       <th>OUT</th>
       ${par.slice(9).map((_,i)=>`<th>${i+10}</th>`).join('')}
       <th>IN</th><th>TOT</th><th>NET</th>
+      ${(r===4||r===5)?'<th style="background:#e8f0ff;color:#1e3560;">+/- Par</th>':''}
       ${isR1?'<th style="background:#b8965a;color:#0a1628;">SF</th><th style="background:#b8965a;color:#0a1628;">vs Q</th>':''}
       ${r===4?'<th style="background:#1e3560;color:#d4b07a;min-width:52px;">TEAM NET</th>':''}
       ${isMatchRound&&matchData?'<th style="background:#152340;color:#b8965a;min-width:60px;">STATUS</th>':''}
@@ -950,6 +953,7 @@ function renderMyScores(r){
       ${par.slice(0,9).map(p=>`<td>${p}</td>`).join('')}<td class="tot-cell">${fPar}</td>
       ${par.slice(9).map(p=>`<td>${p}</td>`).join('')}<td class="tot-cell">${bPar}</td>
       <td class="tot-cell">${fPar+bPar}</td><td></td>
+      ${(r===4||r===5)?'<td class="tot-cell"></td>':''}
       ${isR1?'<td class="tot-cell"></td><td class="tot-cell"></td>':''}
       ${isMatchRound&&matchData?'<td class="tot-cell"></td>':''}
     </tr>
@@ -960,6 +964,7 @@ function renderMyScores(r){
       ${teeData.yards.slice(9).map(y=>`<td style="font-size:10px;">${y}</td>`).join('')}
       <td class="tot-cell" style="font-size:10px;">${teeData.yards.slice(9).reduce((a,b)=>a+b,0)}</td>
       <td class="tot-cell" style="font-size:10px;">${teeData.yards.reduce((a,b)=>a+b,0)}</td><td></td>
+      ${(r===4||r===5)?'<td></td>':''}
       ${isR1?'<td></td><td></td>':''}
       ${isMatchRound&&matchData?'<td></td>':''}
     </tr>
@@ -969,6 +974,7 @@ function renderMyScores(r){
       <td class="tot-cell"></td>
       ${hdcpIndex.slice(9).map(h=>`<td style="font-size:10px;color:var(--text-muted);">${h}</td>`).join('')}
       <td class="tot-cell"></td><td class="tot-cell"></td><td></td>
+      ${(r===4||r===5)?'<td></td>':''}
       ${isR1?'<td></td><td></td>':''}
       ${isMatchRound&&matchData?'<td></td>':''}
     </tr>
@@ -1026,10 +1032,13 @@ function renderMyScores(r){
 
     // Match status
     const latestStatus=isMatchRound&&matchData?(matchData.runningStatus.filter(s=>s!==null).slice(-1)[0]||null):null;
+    const rowToPar=tot?(tot-(fPar+bPar)):null;
+    const rowToParStyle=rowToPar===0?'color:var(--navy);':rowToPar>0?'color:var(--red);':'color:#0a5c36;';
 
     html+=`<td class="tot-cell">${bk||'—'}</td>
       <td class="tot-cell">${tot||'—'}</td>
       <td class="tot-cell">${net?Math.round(net):'—'}</td>
+      ${(r===4||r===5)?`<td class="tot-cell" style="${rowToParStyle}font-weight:700;">${rowToPar!==null?(rowToPar>0?'+':'')+rowToPar:'—'}</td>`:''}
       ${isR1?`<td class="tot-cell" style="background:#f0e8d0;font-weight:700;color:var(--navy);">${sfTot||'—'}</td>
       <td class="tot-cell" style="${vsQ>0?'background:#0a2e18;color:#70d490;':vsQ<0?'background:#3a0a0a;color:#f08080;':'background:#1a2e50;color:#b8d0f8;'}font-weight:700;">${vsQ!==null?(vsQ>0?'+':'')+vsQ:'—'}</td>`:''}
       ${isMatchRound&&matchData&&isMe?`<td class="tot-cell" style="background:#0e1e38;padding:3px 4px;">${latestStatus?matchStatusBadge(latestStatus):'<span style="font-size:9px;color:rgba(255,255,255,0.3);">—</span>'}</td>`:''}
@@ -1872,6 +1881,7 @@ function _renderSC(r,div){
       <th>OUT</th>
       ${par.slice(9).map((_,i)=>`<th>${i+10}</th>`).join('')}
       <th>IN</th><th>TOT</th><th>NET</th>
+      ${(r===4||r===5)?'<th style="background:#e8f0ff;color:#1e3560;">+/- Par</th>':''}
       ${r===1?'<th style="background:#b8965a;color:#0a1628;">SF</th><th style="background:#b8965a;color:#0a1628;">vs Q</th>':''}
     </tr>
     <tr class="par-row">
@@ -1881,6 +1891,7 @@ function _renderSC(r,div){
       ${par.slice(9).map(p=>`<td>${p}</td>`).join('')}
       <td class="tot-cell">${bPar}</td><td class="tot-cell">${fPar+bPar}</td><td></td>
       ${r===1?'<td class="tot-cell"></td><td class="tot-cell"></td>':''}
+      ${(r===4||r===5)?'<td class="tot-cell"></td>':''}
     </tr>
     <tr class="par-row">
       <td class="nc" style="color:${course.tees[selTee].color};font-weight:700;">${selTee} Tees</td><td></td>
@@ -1890,6 +1901,7 @@ function _renderSC(r,div){
       <td class="tot-cell" style="font-size:10px;">${bYds}</td>
       <td class="tot-cell" style="font-size:10px;">${totYds}</td><td></td>
       ${r===1?'<td></td><td></td>':''}
+      ${(r===4||r===5)?'<td></td>':''}
     </tr>
     <tr class="par-row">
       <td class="nc" style="color:var(--text-muted);">HCP Index</td><td></td>
@@ -1898,6 +1910,7 @@ function _renderSC(r,div){
       ${hdcpIndex.slice(9).map(h=>`<td style="font-size:10px;color:var(--text-muted);">${h}</td>`).join('')}
       <td class="tot-cell"></td><td class="tot-cell"></td><td></td>
       ${r===1?'<td></td><td></td>':''}
+      ${(r===4||r===5)?'<td></td>':''}
     </tr>
   </thead><tbody>`;
 
@@ -2025,7 +2038,10 @@ function _renderSC(r,div){
     }
     const quota=38-parseFloat(g.hdcp);
     const vsQ=r===1&&sfTot?(sfTot-quota):null;
+    const toPar=tot?(tot-(fPar+bPar)):null;
+    const toParStyle=toPar===0?'color:var(--navy);':toPar>0?'color:var(--red);':'color:#0a5c36;';
     html+=`<td class="tot-cell">${bk||'—'}</td><td class="tot-cell">${tot||'—'}</td><td class="tot-cell">${net?Math.round(net):'—'}</td>
+      ${(r===4||r===5)?`<td class="tot-cell" style="${toParStyle}font-weight:700;">${toPar!==null?(toPar>0?'+':'')+toPar:'—'}</td>`:''}
       ${r===1?`<td class="tot-cell" style="background:#f0e8d0;font-weight:700;color:var(--navy);">${sfTot||'—'}</td>
       <td class="tot-cell" style="${vsQ>0?'background:#0a2e18;color:#70d490;':vsQ<0?'background:#3a0a0a;color:#f08080;':'background:#1a2e50;color:#b8d0f8;'}font-weight:700;">${vsQ!==null?(vsQ>0?'+':'')+vsQ:'—'}</td>`:''}
       ${isMatchRound&&matchData?`<td class="tot-cell" style="background:#0e1e38;padding:3px 4px;">
@@ -2485,13 +2501,42 @@ function getGrossAny(gid,r){ // partial OK for display
 // Assign ranks with tie handling (shared rank, skip next)
 function assignRanks(arr, valueFn, ascending=true){
   const sorted=[...arr].sort((a,b)=>ascending?valueFn(a)-valueFn(b):valueFn(b)-valueFn(a));
-  let rank=1;
-  sorted.forEach((item,i)=>{
-    if(i>0&&valueFn(item)===valueFn(sorted[i-1])){item.rank=sorted[i-1].rank;}
-    else{item.rank=rank;}
-    rank=item.rank+1;
-  });
+  let i=0;
+  while(i<sorted.length){
+    // Find how many players share this value (tied)
+    let j=i;
+    while(j<sorted.length && valueFn(sorted[j])===valueFn(sorted[i])) j++;
+    const tieCount=j-i;
+    const startRank=i+1;
+    for(let k=i;k<j;k++){
+      sorted[k].rank=startRank;
+      sorted[k].tieCount=tieCount; // how many tied at this position
+    }
+    i=j;
+  }
   return sorted;
+}
+
+// Average DBI points across tied positions from a points table
+// e.g. 2 players tie for 1st in R1 (14 pts + 13 pts) / 2 = 13.5 each
+// next player starts at rank 3 (skips rank 2)
+function ptsForTie(ptsTable, rank, tieCount){
+  let total=0;
+  for(let i=0;i<tieCount;i++){
+    const idx=rank-1+i;
+    total+=ptsTable[idx]??0;
+  }
+  return Math.round((total/tieCount)*10)/10; // round to 1 decimal
+}
+
+// For linear descending formats (R1: 14 down to 0, R5: 16 down to 0)
+// Points = max - (rank-1), averaged across tied positions
+function linearPtsForTie(maxPts, rank, tieCount){
+  let total=0;
+  for(let i=0;i<tieCount;i++){
+    total+=Math.max(0, maxPts-(rank-1+i));
+  }
+  return Math.round((total/tieCount)*10)/10;
 }
 
 // Save round results to Supabase and update local cache
@@ -2542,9 +2587,9 @@ async function calcRound1(){
   const results=ranked.map(e=>({
     golfer_id:e.golfer_id,
     stableford_pts:e.sfPts,
-    dbi_points:Math.max(0,14-(e.rank-1)),
+    dbi_points:linearPtsForTie(14,e.rank,e.tieCount),
     place:e.rank,
-    notes:`Quota:${e.quota} SF:${e.sfPts} vsQ:${e.vsQuota>=0?'+':''}${e.vsQuota}`
+    notes:`Quota:${e.quota} SF:${e.sfPts} vsQ:${e.vsQuota>=0?'+':''}${e.vsQuota}${e.tieCount>1?` T${e.tieCount}`:''}`
   }));
   await saveRoundResults(1,results);
   renderLB();renderMyScores(curMyR);
@@ -2574,8 +2619,8 @@ async function calcRound2(){
   const ranked=assignRanks(teams,t=>t.gross,true);
   const results=[];
   ranked.forEach(t=>{
-    const pts=R2PTS[t.rank-1]??0;
-    t.playerIds.forEach(gid=>{results.push({golfer_id:gid,dbi_points:pts,gross_score:t.gross,place:t.rank,notes:`Team gross:${t.gross}`});});
+    const pts=ptsForTie(R2PTS,t.rank,t.tieCount);
+    t.playerIds.forEach(gid=>{results.push({golfer_id:gid,dbi_points:pts,gross_score:t.gross,place:t.rank,notes:`Team gross:${t.gross}${t.tieCount>1?` T${t.tieCount}`:''}`});});
   });
   await saveRoundResults(2,results);
   renderLB();renderMyScores(curMyR);
@@ -2606,22 +2651,28 @@ async function calcRound3(){
     }
     // Fall back to manual dropdowns if no scorecard data
     if(!front) front=document.getElementById(`r3f_${mi}`)?.value;
-    if(!back) back=document.getElementById(`r3b_${mi}`)?.value;
+    if(!back)  back=document.getElementById(`r3b_${mi}`)?.value;
     if(!total) total=document.getElementById(`r3t_${mi}`)?.value;
-    if(!front&&!back&&!total)return;
+    if(!front&&!back&&!total) return;
 
+    // 3 pts per bet won, 1.5 each for a tie, 0 for a loss. Max 9 per player.
+    // NO additional "winning team" bonus — that is handled separately via the Team Cup 5-pt award.
     const ptsA={},ptsB={};
-    teamA.forEach(id=>{ptsA[id]=0;});teamB.forEach(id=>{ptsB[id]=0;});
+    teamA.forEach(id=>{ptsA[id]=0;});
+    teamB.forEach(id=>{ptsB[id]=0;});
     [[front,3],[back,3],[total,3]].forEach(([w,pts])=>{
-      if(w==='A')teamA.forEach(id=>ptsA[id]+=pts);
-      else if(w==='B')teamB.forEach(id=>ptsB[id]+=pts);
+      if(w==='A'){
+        teamA.forEach(id=>ptsA[id]+=pts);
+      } else if(w==='B'){
+        teamB.forEach(id=>ptsB[id]+=pts);
+      } else if(w==='T'){
+        teamA.forEach(id=>ptsA[id]+=pts/2);
+        teamB.forEach(id=>ptsB[id]+=pts/2);
+      }
     });
-    const aTotal=teamA.reduce((s,id)=>s+ptsA[id],0);
-    const bTotal=teamB.reduce((s,id)=>s+ptsB[id],0);
-    if(aTotal>bTotal)teamA.forEach(id=>ptsA[id]+=3);
-    else if(bTotal>aTotal)teamB.forEach(id=>ptsB[id]+=3);
-    teamA.forEach(id=>results.push({golfer_id:id,dbi_points:ptsA[id],place:aTotal>=bTotal?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
-    teamB.forEach(id=>results.push({golfer_id:id,dbi_points:ptsB[id],place:bTotal>aTotal?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
+    // Cap at 9 pts per player just in case
+    teamA.forEach(id=>results.push({golfer_id:id,dbi_points:Math.min(9,ptsA[id]),place:ptsA[id]>=ptsB[Object.keys(ptsB)[0]]?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
+    teamB.forEach(id=>results.push({golfer_id:id,dbi_points:Math.min(9,ptsB[id]),place:ptsB[id]>ptsA[Object.keys(ptsA)[0]]?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
   });
   if(results.length===0){showToast('No Round 3 scores found. Enter individual hole scores on the scorecards tab, or select winners manually below.');return;}
   await saveRoundResults(3,results);
@@ -2671,8 +2722,8 @@ async function calcRound4(){
   const ranked=assignRanks(teams,t=>t.net,true);
   const results=[];
   ranked.forEach(t=>{
-    const pts=R4PTS[t.rank-1]??0;
-    t.playerIds.forEach(gid=>results.push({golfer_id:gid,dbi_points:pts,net_score:t.net,place:t.rank,notes:`Team net (best 2 per hole):${t.net}`}));
+    const pts=ptsForTie(R4PTS,t.rank,t.tieCount);
+    t.playerIds.forEach(gid=>results.push({golfer_id:gid,dbi_points:pts,net_score:t.net,place:t.rank,notes:`Team net (best 2 per hole):${t.net}${t.tieCount>1?` T${t.tieCount}`:''}`}));
   });
   await saveRoundResults(4,results);
   renderLB();renderMyScores(curMyR);
@@ -2693,9 +2744,9 @@ async function calcRound5(){
     golfer_id:e.golfer_id,
     gross_score:e.gross,
     net_score:e.net,
-    dbi_points:Math.max(0,16-(e.rank-1)),
+    dbi_points:linearPtsForTie(16,e.rank,e.tieCount),
     place:e.rank,
-    notes:`Gross:${e.gross} Net:${e.net}`
+    notes:`Gross:${e.gross} Net:${e.net}${e.tieCount>1?` T${e.tieCount}`:''}`
   }));
   await saveRoundResults(5,results);
   renderLB();renderMyScores(curMyR);
@@ -2703,7 +2754,6 @@ async function calcRound5(){
 }
 
 // ---- ROUND 6: 2v2 Scramble Match Play Nassau ----
-// Same structure as Round 3 — manual front/back/total winner selection
 async function calcRound6(){
   const grps=pairingsData[6]||[];
   const results=[];
@@ -2724,27 +2774,63 @@ async function calcRound6(){
     }
     // Fall back to manual dropdowns if no scorecard data
     if(!front) front=document.getElementById(`r6f_${mi}`)?.value;
-    if(!back) back=document.getElementById(`r6b_${mi}`)?.value;
+    if(!back)  back=document.getElementById(`r6b_${mi}`)?.value;
     if(!total) total=document.getElementById(`r6t_${mi}`)?.value;
-    if(!front&&!back&&!total)return;
+    if(!front&&!back&&!total) return;
 
+    // 3 pts per bet won, 1.5 each for a tie, 0 for a loss. Max 9 per player.
+    // NO additional "winning team" bonus — that is handled separately via the Team Cup 5-pt award.
     const ptsA={},ptsB={};
-    teamA.forEach(id=>{ptsA[id]=0;});teamB.forEach(id=>{ptsB[id]=0;});
+    teamA.forEach(id=>{ptsA[id]=0;});
+    teamB.forEach(id=>{ptsB[id]=0;});
     [[front,3],[back,3],[total,3]].forEach(([w,pts])=>{
-      if(w==='A')teamA.forEach(id=>ptsA[id]+=pts);
-      else if(w==='B')teamB.forEach(id=>ptsB[id]+=pts);
+      if(w==='A'){
+        teamA.forEach(id=>ptsA[id]+=pts);
+      } else if(w==='B'){
+        teamB.forEach(id=>ptsB[id]+=pts);
+      } else if(w==='T'){
+        teamA.forEach(id=>ptsA[id]+=pts/2);
+        teamB.forEach(id=>ptsB[id]+=pts/2);
+      }
     });
-    const aTotal=teamA.reduce((s,id)=>s+ptsA[id],0);
-    const bTotal=teamB.reduce((s,id)=>s+ptsB[id],0);
-    if(aTotal>bTotal)teamA.forEach(id=>ptsA[id]+=3);
-    else if(bTotal>aTotal)teamB.forEach(id=>ptsB[id]+=3);
-    teamA.forEach(id=>results.push({golfer_id:id,dbi_points:ptsA[id],place:aTotal>=bTotal?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
-    teamB.forEach(id=>results.push({golfer_id:id,dbi_points:ptsB[id],place:bTotal>aTotal?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
+    // Cap at 9 pts per player just in case
+    teamA.forEach(id=>results.push({golfer_id:id,dbi_points:Math.min(9,ptsA[id]),place:ptsA[id]>=ptsB[Object.keys(ptsB)[0]]?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
+    teamB.forEach(id=>results.push({golfer_id:id,dbi_points:Math.min(9,ptsB[id]),place:ptsB[id]>ptsA[Object.keys(ptsA)[0]]?1:2,notes:`Match ${mi+1} Front:${front} Back:${back} Total:${total}`}));
   });
   if(results.length===0){showToast('No Round 6 scores found. Enter team scramble scores on the scorecards tab, or select winners manually below.');return;}
   await saveRoundResults(6,results);
   renderLB();renderMyScores(curMyR);
   return results;
+}
+
+// Award the 5-pt Team Cup bonus to the winning team's 10 players after R6
+async function awardTeamCupBonus(){
+  const r3pts=calcTeamRoundPoints(3);
+  const r6pts=calcTeamRoundPoints(6);
+  const totalA=r3pts.teamAPts+r6pts.teamAPts;
+  const totalB=r3pts.teamBPts+r6pts.teamBPts;
+  if(totalA===totalB){showToast('Team Cup is tied! Resolve the tie before awarding bonus points.');return;}
+
+  const winningTeam=totalA>totalB?'A':'B';
+  const winnerName=totalA>totalB?(teamComp.team_a_name||'Team A'):(teamComp.team_b_name||'Team B');
+  if(!confirm(`Award 5 bonus DBI points to all 10 players on ${winnerName}? This cannot be undone.`)) return;
+
+  const winnerGolferIds=golfers.filter(g=>teamPlayers[g.id]===winningTeam).map(g=>g.id);
+  if(!winnerGolferIds.length){showToast('No players assigned to the winning team. Set up the Team Cup first.');return;}
+
+  showToast(`Awarding 5 bonus pts to ${winnerName}...`);
+  // Update round_results for round 6 (or insert if missing) with team_bonus_points
+  for(const gid of winnerGolferIds){
+    const existing=roundResults[6]?.[gid];
+    if(existing){
+      await sb.from('round_results').update({team_bonus_points:5,dbi_points:(existing.dbi_points||0)+5}).eq('round',6).eq('golfer_id',gid);
+    } else {
+      await sb.from('round_results').insert({round:6,golfer_id:gid,dbi_points:5,team_bonus_points:5,notes:'Team Cup bonus'});
+    }
+  }
+  await loadAll();
+  renderLB();renderScoringAdmin();
+  showToast(`✓ 5 bonus points awarded to ${winnerName}! Final leaderboard updated.`);
 }
 
 // ---- SCORING ADMIN PANEL ----
@@ -2912,7 +2998,8 @@ function renderScoringAdmin(){
     <span>Round 6 — 2v2 Scramble Match Play Nassau</span>
     <button class="btn btn-gold btn-sm" onclick="runCalc(6)">⚡ Calculate &amp; Save Points</button>
   </div><div class="card-body">
-    <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Team scramble — one score per hole per team. Combined team HDCP = A-player (70%) + B-player (30%). Results auto-calculate from scorecard data entered on the scorecards tab; manual override available below if needed.</p>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Team scramble — one score per hole per team. Combined team HDCP = A-player (70%) + B-player (30%). Results auto-calculate from scorecard data entered on the scorecards tab; manual override available below if needed.</p>
+    <p style="font-size:12px;color:var(--gold);margin-bottom:12px;"><strong>Step 1:</strong> Calculate match points here (3 pts per Nassau bet won, 1.5 for a tie, max 9 per player). <strong>Step 2:</strong> Go to ⚔️ Team Cup to award the +5 bonus to the overall Team Cup winners once R6 is complete.</p>
     <table class="data-table"><thead><tr><th>Match</th><th>Team A (Combined HDCP)</th><th>Team B (Combined HDCP)</th><th>Auto Status</th><th>Front 9 Override</th><th>Back 9 Override</th><th>Total Override</th><th>DBI Pts</th></tr></thead><tbody>
     ${(pairingsData[6]||Array(5).fill(null)).slice(0,5).map((g,mi)=>{
       const pi=g?.player_indices||[];
@@ -2962,15 +3049,13 @@ function renderR1Preview(){
   }).sort((a,b)=>b.vsQ-a.vsQ);
   const rows=items.map((item,rank)=>{
     const {g,holes,sfPts,quota,vsQ,rr}=item;
-    const projPts=holes>0?Math.max(0,14-rank):null;
     return `<tr><td><strong>${rank+1}.</strong> ${g.name}</td><td>${g.hdcp}</td><td>${quota}</td>
       <td>${holes}/18</td><td>${holes>0?sfPts:'—'}</td>
       <td style="font-weight:700;color:${vsQ>=0?'#0a5c36':'var(--red)'};">${holes>0?(vsQ>=0?'+':'')+vsQ:'—'}</td>
-      <td>${projPts!==null?`<span class="pts-chip" style="opacity:${rr?0.4:1};">${projPts}</span>`:'—'}</td>
       <td>${rr?`<span class="pts-chip">${rr.dbi_points}</span> <span style="font-size:10px;color:var(--text-muted);">(${rr.place}${ord(rr.place)})</span>`:'<span style="color:var(--text-muted);font-size:11px;">pending</span>'}</td></tr>`;
   });
   return `<table class="data-table" style="margin-top:10px;"><thead><tr>
-    <th>Golfer</th><th>HDCP</th><th>Quota</th><th>Holes</th><th>SF Pts</th><th>vs Quota</th><th>Proj. DBI</th><th>Final DBI</th>
+    <th>Golfer</th><th>HDCP</th><th>Quota</th><th>Holes</th><th>SF Pts</th><th>vs Quota</th><th>DBI Pts</th>
   </tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
@@ -2989,16 +3074,14 @@ function renderR5Preview(){
   });
   const rows=items.map((item,rank)=>{
     const {g,gross,net,rr,holes}=item;
-    const projPts=net!==null?Math.max(0,16-rank):null;
     return `<tr><td><strong>${net!==null?rank+1:'—'}.</strong> ${g.name}</td><td>${g.hdcp}</td>
       <td>${holes}/18</td>
       <td style="font-weight:700;">${gross!==null?gross:'—'}</td>
       <td style="font-weight:700;color:var(--navy);">${net!==null?Math.round(net):'—'}</td>
-      <td>${projPts!==null?`<span class="pts-chip" style="opacity:${rr?0.4:1};">${projPts}</span>`:'—'}</td>
       <td>${rr?`<span class="pts-chip">${rr.dbi_points}</span> <span style="font-size:10px;color:var(--text-muted);">(${rr.place}${ord(rr.place)})</span>`:'<span style="color:var(--text-muted);font-size:11px;">pending</span>'}</td></tr>`;
   });
   return `<table class="data-table" style="margin-top:10px;"><thead><tr>
-    <th>Golfer</th><th>HDCP</th><th>Holes</th><th>Gross</th><th>Net</th><th>Proj. DBI</th><th>Final DBI</th>
+    <th>Golfer</th><th>HDCP</th><th>Holes</th><th>Gross</th><th>Net</th><th>DBI Pts</th>
   </tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
@@ -3232,6 +3315,12 @@ async function renderTeamCup(){
         <div style="font-size:18px;font-weight:700;color:#70d490;margin-top:2px;">${r6pts.teamAPts%1===0?r6pts.teamAPts:r6pts.teamAPts.toFixed(1)} <span style="color:rgba(255,255,255,0.2);">·</span> <span style="color:#f08080;">${r6pts.teamBPts%1===0?r6pts.teamBPts:r6pts.teamBPts.toFixed(1)}</span></div>
       </div>
     </div>
+    ${IS_ADMIN&&(totalA!==totalB)?`<div style="padding:12px 16px;background:#0a1628;border-top:1px solid var(--gold);text-align:center;">
+      <button class="btn btn-gold" onclick="awardTeamCupBonus()" style="font-size:13px;padding:10px 24px;">
+        🏆 Award 5 DBI Bonus Points to ${totalA>totalB?(teamComp.team_a_name||'Team A'):(teamComp.team_b_name||'Team B')} Winners
+      </button>
+      <p style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:6px;">Awards +5 DBI points to all 10 players on the winning team. Do this after Round 6 is complete.</p>
+    </div>`:''}
   </div>`;
 
   // ---- MATCH RESULTS (R3 & R6) ----
