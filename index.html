@@ -2443,7 +2443,7 @@ function renderShootoutLive(top10){
   const par=WILD_HORSE.par;
   const hdcpIdx=WILD_HORSE.hdcp;
 
-  // Determine current active hole — use admin override if set, otherwise auto-detect
+  // Auto-detect current hole: last hole with eliminations or scores
   let curHole=1;
   for(let h=1;h<=7;h++){
     const hasElim=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===h);
@@ -2456,12 +2456,250 @@ function renderShootoutLive(top10){
     const hasScore=activeHere.some(g=>shootoutHoleScores[g.id]?.[h]);
     if(hasScore||hasElim) curHole=h;
   }
-  const curHoleLocked=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===curHole);
-  const autHole=curHoleLocked?Math.min(7,curHole+1):curHole;
-  const displayHole=shootoutCurrentHole||autHole;
+  const holeLocked=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===curHole);
+  const autoHole=holeLocked?Math.min(7,curHole+1):curHole;
+  const displayHole=shootoutCurrentHole||autoHole;
 
-  const stillActive=top10.filter(g=>(shootoutSt[g.id]?.status||'active')==='active');
+  // Champion state
   const champion=top10.find(g=>shootoutSt[g.id]?.status==='champion');
+  if(champion){
+    wrap.innerHTML=`<div class="card" style="background:linear-gradient(135deg,#0a1628,#1a2e50);margin-bottom:16px;">
+      <div class="card-body" style="text-align:center;padding:32px 24px;">
+        <div style="font-size:48px;margin-bottom:12px;">🏆</div>
+        <div style="font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:var(--gold);">${champion.name}</div>
+        <div style="font-size:14px;color:rgba(255,255,255,0.6);margin-top:6px;">Individual DBI Champion · Last Man Standing</div>
+      </div>
+    </div>`;
+    return;
+  }
+
+  const holePar=par[displayHole-1];
+  const holeHdcp=hdcpIdx[displayHole-1];
+  const numElim=SO_ELIM_PER_HOLE[displayHole]||1;
+  const thisHoleLocked=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===displayHole);
+
+  // Players active on this hole (entered AND not eliminated)
+  const activePlayers=top10.filter(g=>{
+    const st=shootoutSt[g.id]?.status||'active';
+    if(st==='eliminated'||st==='champion') return false;
+    const idx=soSeedIdx(g.id,top10);
+    return idx>=0 && displayHole>=soEntryHole(idx);
+  });
+
+  // Players waiting to enter on later holes
+  const futureEntrants=top10.filter(g=>{
+    const st=shootoutSt[g.id]?.status||'active';
+    if(st==='eliminated'||st==='champion') return false;
+    const idx=soSeedIdx(g.id,top10);
+    return idx>=0 && displayHole<soEntryHole(idx);
+  });
+
+  // Already eliminated
+  const eliminated=top10.filter(g=>shootoutSt[g.id]?.status==='eliminated');
+
+  let html=`<div class="card" style="border:2px solid var(--navy);margin-bottom:16px;">
+
+    <!-- Hole header -->
+    <div style="background:var(--navy);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:2px;">Current Hole</div>
+        <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:var(--gold);line-height:1;">Hole ${displayHole}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.6);">Par ${holePar} · HCP Index ${holeHdcp}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;">Eliminate</div>
+        <div style="font-size:32px;font-weight:700;color:#f08080;">${numElim}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);">${activePlayers.length} playing this hole</div>
+      </div>
+    </div>
+
+    <!-- Hole navigation strip -->
+    <div style="display:flex;gap:4px;padding:10px 16px;background:#f8f4ec;border-bottom:1px solid var(--border);">
+      ${[1,2,3,4,5,6,7].map(h=>{
+        const done=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===h);
+        const hasAnyScore=top10.some(g=>shootoutHoleScores[g.id]?.[h]);
+        return `<button onclick="setShootoutHole(${h})" style="flex:1;padding:8px 2px;border:none;border-radius:2px;font-size:12px;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer;
+          background:${h===displayHole?'var(--navy)':done?'#d4edda':hasAnyScore?'#f0e8d0':'var(--parchment)'};
+          color:${h===displayHole?'var(--gold-light)':done?'#0a5c36':hasAnyScore?'#8b6914':'var(--text-muted)'};">
+          ${h}${done?'✓':''}
+        </button>`;
+      }).join('')}
+    </div>
+
+    <!-- Score entry rows for active players -->
+    <div>`;
+
+  activePlayers.forEach(g=>{
+    const sc=shootoutHoleScores[g.id]?.[displayHole]||'';
+    const strokes=getStrokes(g.hdcp,holeHdcp,1.0);
+    const netScore=sc!==''?(parseInt(sc)-strokes):null;
+    const scoreColor=sc!==''?holeColor(parseInt(sc),holePar):'';
+    const dotHtml=strokes>0?`<span style="display:inline-flex;gap:2px;margin-left:3px;">${Array(strokes).fill('<span style="width:5px;height:5px;border-radius:50%;background:var(--gold);display:inline-block;"></span>').join('')}</span>`:'';
+    const isMe=g.id===ME?.id;
+    const canEdit=IS_ADMIN||isMe;
+
+    html+=`<div class="so-live-player${isMe?' my-group':''}">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:15px;font-weight:700;">${g.name.split(' ')[0]}${dotHtml}${isMe?' ★':''}</div>
+        <div style="font-size:11px;color:var(--text-muted);">HDCP ${g.hdcp}${strokes>0?` · gets ${strokes} stroke${strokes>1?'s':''}`:' · no strokes'}</div>
+        ${netScore!==null?`<div style="font-size:12px;font-weight:700;color:${netScore<holePar?'#0a5c36':netScore>holePar?'var(--red)':'var(--navy)'};">
+          Gross ${sc} → Net ${netScore}
+        </div>`:''}
+      </div>
+      ${canEdit&&!thisHoleLocked?`
+        <button class="so-score-btn" onclick="soAdjScore(${g.id},${displayHole},-1)">−</button>
+        <input class="so-score-box ${scoreColor}" id="so-inp-${g.id}-${displayHole}" type="number"
+          value="${sc}" min="1" max="15"
+          oninput="onSoLiveInput(this,${g.id},${displayHole})"
+          style="border-color:${sc?'var(--navy)':'var(--border)'};">
+        <button class="so-score-btn" onclick="soAdjScore(${g.id},${displayHole},1)">+</button>
+      `:`<div style="width:56px;height:56px;border:2px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;" class="${scoreColor}">${sc||'—'}</div>`}
+    </div>`;
+  });
+
+  if(futureEntrants.length){
+    html+=`<div style="padding:8px 16px;background:#f8f4ec;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
+      ⏳ Waiting to enter: ${futureEntrants.map(g=>{
+        const idx=soSeedIdx(g.id,top10);
+        return `${g.name.split(' ')[0]} → Hole ${soEntryHole(idx)}`;
+      }).join(' · ')}
+    </div>`;
+  }
+
+  if(eliminated.length){
+    html+=`<div style="padding:8px 16px;background:#fff5f5;border-top:1px solid #fde8e8;font-size:11px;color:#8b1a1a;">
+      ❌ Eliminated: ${eliminated.map(g=>`${g.name.split(' ')[0]} (H${shootoutSt[g.id]?.eliminated_hole||'?'})`).join(' · ')}
+    </div>`;
+  }
+  html+=`</div>`;
+
+  // ---- ELIMINATION ACTION AREA ----
+  if(thisHoleLocked){
+    // Hole done — show who was eliminated and a Next button
+    const elimHere=top10.filter(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===displayHole);
+    html+=`<div style="padding:14px 16px;background:#e8f5ee;border:2px solid #0a5c36;border-radius:2px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span style="font-size:22px;">✅</span>
+      <div style="flex:1;">
+        <div style="font-weight:700;color:#0a5c36;font-size:14px;">Hole ${displayHole} complete</div>
+        <div style="font-size:12px;color:#0a5c36;">Eliminated: ${elimHere.map(g=>g.name).join(', ')}</div>
+      </div>
+      ${displayHole<7?`<button onclick="setShootoutHole(${displayHole+1})" class="btn btn-gold" style="font-size:14px;padding:12px 24px;white-space:nowrap;">
+        Next: Hole ${displayHole+1} →
+      </button>`:''}
+    </div>`;
+  } else if(IS_ADMIN){
+    // Manual elimination checklist
+    html+=`<div class="card" style="border:2px solid var(--gold);margin-top:0;">
+      <div class="card-header" style="background:#1a2e50;">
+        <span style="color:var(--gold-light);">❌ Select player${numElim>1?'s':''} to eliminate (${numElim} out)</span>
+      </div>
+      <div style="padding:10px 16px;">
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+          ${activePlayers.map(g=>{
+            const sc=shootoutHoleScores[g.id]?.[displayHole]||'';
+            const strokes=getStrokes(g.hdcp,holeHdcp,1.0);
+            const net=sc!==''?parseInt(sc)-strokes:null;
+            return `<label style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:2px solid var(--border);border-radius:4px;cursor:pointer;background:var(--white);-webkit-tap-highlight-color:transparent;"
+              onclick="this.style.background=document.getElementById('elim-${g.id}').checked?'var(--white)':'#fff5f5';this.style.borderColor=document.getElementById('elim-${g.id}').checked?'var(--border)':'#8b1a1a';">
+              <input type="checkbox" id="elim-${g.id}" value="${g.id}"
+                style="width:20px;height:20px;cursor:pointer;accent-color:#8b1a1a;">
+              <div style="flex:1;">
+                <div style="font-size:15px;font-weight:700;">${g.name}</div>
+                <div style="font-size:12px;color:var(--text-muted);">HDCP ${g.hdcp} · Gross: ${sc||'—'} · Net: ${net!==null?net:'—'}</div>
+              </div>
+            </label>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button onclick="eliminateCheckedFromPanel(${displayHole})" class="so-elim-btn" style="font-size:14px;padding:14px 28px;">
+            ❌ Eliminate Selected
+          </button>
+          <button onclick="setShootoutHole(${displayHole+1<8?displayHole+1:displayHole})" style="padding:14px 20px;background:var(--parchment);border:1px solid var(--border);border-radius:2px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">
+            Skip to Hole ${Math.min(7,displayHole+1)} →
+          </button>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">Tick the golfer(s) who scored highest. In a tie, tick all tied players then handle the putt-off — eliminate the loser after.</div>
+      </div>
+    </div>`;
+  } else {
+    // Non-admin view
+    html+=`<div style="padding:12px 16px;background:#fff8e8;border:1px solid var(--gold);border-radius:2px;font-size:13px;color:#8b6914;font-weight:600;">
+      ⏳ Waiting for admin to confirm eliminations for Hole ${displayHole}.
+    </div>`;
+  }
+
+  html+=`</div>`; // close outer wrapper
+
+  wrap.innerHTML=html;
+}
+
+let shootoutCurrentHole=null;
+
+function setShootoutHole(h){
+  shootoutCurrentHole=h;
+  const top10=soTop10();
+  renderShootoutLive(top10);
+  renderShootoutScorecard(top10);
+}
+
+async function eliminateCheckedFromPanel(hole){
+  const checked=document.querySelectorAll('[id^="elim-"]:checked');
+  if(!checked.length){showToast('Tick at least one player to eliminate.');return;}
+  const names=[...checked].map(cb=>{const g=golfers.find(x=>x.id===parseInt(cb.value));return g?.name.split(' ')[0]||'?';}).join(' & ');
+  if(!confirm(`Eliminate ${names} on Hole ${hole}?`)) return;
+  const top10=soTop10();
+  for(const cb of checked){
+    const gid=parseInt(cb.value);
+    await sb.from('shootout').upsert({golfer_id:gid,status:'eliminated',eliminated_hole:hole},{onConflict:'golfer_id'});
+    shootoutSt[gid]={...(shootoutSt[gid]||{}),status:'eliminated',eliminated_hole:hole};
+  }
+  // Auto-champion if 1 left
+  const stillActive=top10.filter(g=>(shootoutSt[g.id]?.status||'active')==='active');
+  if(stillActive.length===1){
+    const champ=stillActive[0];
+    await sb.from('shootout').upsert({golfer_id:champ.id,status:'champion'},{onConflict:'golfer_id'});
+    shootoutSt[champ.id]={...(shootoutSt[champ.id]||{}),status:'champion'};
+    showToast(`🏆 ${champ.name} is the Shootout Champion!`);
+  } else {
+    showToast(`✓ ${names} eliminated on Hole ${hole}.`);
+  }
+  shootoutCurrentHole=null; // auto-advance
+  renderShootout();
+}
+
+function showPuttoffPanel(hole){} // kept for compatibility
+
+async function eliminateChecked(hole){ await eliminateCheckedFromPanel(hole); }
+
+function onSoLiveInput(inp,gid,hole){
+  const v=parseInt(inp.value);
+  const p=WILD_HORSE.par[hole-1];
+  inp.className='so-score-box'+(v?' '+holeColor(v,p):'');
+  inp.style.borderColor=v?'var(--navy)':'var(--border)';
+  if(!shootoutHoleScores[gid]) shootoutHoleScores[gid]={};
+  if(v>=1) shootoutHoleScores[gid][hole]=v;
+  else delete shootoutHoleScores[gid][hole];
+  markUnsaved(inp);
+  clearTimeout(saveTimers[`so_live_${gid}_${hole}`]);
+  saveTimers[`so_live_${gid}_${hole}`]=setTimeout(async()=>{
+    if(!v||v<1) return;
+    const {error}=await sb.from('shootout_hole_scores').upsert(
+      {golfer_id:gid,hole,gross_score:v},{onConflict:'golfer_id,hole'}
+    );
+    if(error){markSaveFailed(inp,error.message);showToast(`⚠️ Save failed: ${error.message}`);return;}
+    markSaved(inp);
+    const top10=soTop10();
+    renderShootoutLive(top10);
+  },600);
+}
+
+function soAdjScore(gid,hole,delta){
+  const inp=document.getElementById(`so-inp-${gid}-${hole}`);
+  if(!inp) return;
+  const cur=parseInt(inp.value)||0;
+  inp.value=Math.max(1,Math.min(15,cur+delta));
+  inp.dispatchEvent(new Event('input'));
+}
 
   // Champion state
   if(champion){
@@ -2593,100 +2831,6 @@ function renderShootoutLive(top10){
     const scored=activePlayers.filter(g=>shootoutHoleScores[g.id]?.[displayHole]).length;
     html+=`<div style="font-size:12px;color:var(--text-muted);">📝 ${scored}/${activePlayers.length} scores entered for Hole ${displayHole}</div>`;
   }
-  html+=`</div></div>`;
-
-  // Putt-off panel (hidden by default)
-  html+=`<div id="so-putt-panel" style="display:none;margin-top:12px;">
-    <div class="card" style="border:2px solid #8b6914;">
-      <div class="card-header" style="background:#8b6914;color:white;"><span>🏌 Putt-off — Manual Elimination</span></div>
-      <div class="card-body">
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Select the player(s) eliminated in the putt-off on Hole ${displayHole}:</p>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
-          ${activePlayers.map(g=>`
-            <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--border);border-radius:2px;cursor:pointer;background:var(--white);">
-              <input type="checkbox" id="putt-${g.id}" value="${g.id}" style="width:18px;height:18px;cursor:pointer;">
-              <span style="font-size:14px;font-weight:600;">${g.name}</span>
-              <span style="font-size:11px;color:var(--text-muted);">HDCP ${g.hdcp} · Score: ${shootoutHoleScores[g.id]?.[displayHole]||'—'}</span>
-            </label>`).join('')}
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="so-elim-btn" onclick="eliminateChecked(${displayHole})">❌ Eliminate Selected</button>
-          <button onclick="document.getElementById('so-putt-panel').style.display='none'" style="padding:10px 16px;background:var(--parchment);border:1px solid var(--border);border-radius:2px;font-family:'Inter',sans-serif;font-size:12px;font-weight:600;cursor:pointer;">Cancel</button>
-        </div>
-      </div>
-    </div>
-  </div>`;
-
-  wrap.innerHTML=html;
-}
-
-let shootoutCurrentHole=null; // admin-overridden hole display
-
-function setShootoutHole(h){
-  shootoutCurrentHole=h;
-  const top10=soTop10();
-  renderShootoutLive(top10);
-  renderShootoutScorecard(top10);
-}
-
-function showPuttoffPanel(hole){
-  const p=document.getElementById('so-putt-panel');
-  if(p) p.style.display=p.style.display==='none'?'block':'none';
-}
-
-async function eliminateChecked(hole){
-  const checkboxes=document.querySelectorAll('[id^="putt-"]:checked');
-  if(!checkboxes.length){showToast('Select at least one player to eliminate.');return;}
-  const top10=soTop10();
-  for(const cb of checkboxes){
-    const gid=parseInt(cb.value);
-    const g=golfers.find(x=>x.id===gid);
-    await sb.from('shootout').upsert({golfer_id:gid,status:'eliminated',eliminated_hole:hole},{onConflict:'golfer_id'});
-    shootoutSt[gid]={...(shootoutSt[gid]||{}),status:'eliminated',eliminated_hole:hole};
-  }
-  // Check for champion
-  const stillActive=top10.filter(g=>(shootoutSt[g.id]?.status||'active')==='active');
-  if(stillActive.length===1){
-    const champ=stillActive[0];
-    await sb.from('shootout').upsert({golfer_id:champ.id,status:'champion',eliminated_hole:null},{onConflict:'golfer_id'});
-    shootoutSt[champ.id]={...(shootoutSt[champ.id]||{}),status:'champion'};
-    showToast(`🏆 ${champ.name} is the Champion!`);
-  } else {
-    showToast(`✓ ${checkboxes.length} player${checkboxes.length>1?'s':''} eliminated on Hole ${hole}.`);
-  }
-  renderShootout();
-}
-
-function onSoLiveInput(inp,gid,hole){
-  const v=parseInt(inp.value);
-  const par=WILD_HORSE.par[hole-1];
-  inp.className='so-score-box'+(v?' '+holeColor(v,par):'');
-  inp.style.borderColor=v?'var(--navy)':'var(--border)';
-  if(!shootoutHoleScores[gid]) shootoutHoleScores[gid]={};
-  if(v>=1) shootoutHoleScores[gid][hole]=v;
-  markUnsaved(inp);
-  clearTimeout(saveTimers[`so_live_${gid}_${hole}`]);
-  saveTimers[`so_live_${gid}_${hole}`]=setTimeout(async()=>{
-    if(!v||v<1) return;
-    const {error}=await sb.from('shootout_hole_scores').upsert(
-      {golfer_id:gid,hole,gross_score:v},{onConflict:'golfer_id,hole'}
-    );
-    if(error){markSaveFailed(inp,error.message);showToast(`⚠️ Save failed: ${error.message}`);return;}
-    markSaved(inp);
-    // Refresh the action bar only
-    const top10=soTop10();
-    renderShootoutLive(top10);
-  },600);
-}
-
-function soAdjScore(gid,hole,delta){
-  const inp=document.getElementById(`so-inp-${gid}-${hole}`);
-  if(!inp) return;
-  const cur=parseInt(inp.value)||0;
-  inp.value=Math.max(1,Math.min(15,cur+delta));
-  inp.dispatchEvent(new Event('input'));
-}
-
 function renderShootoutScorecard(top10){
   const wrap=document.getElementById('shootout-scorecard-wrap');
   if(!wrap) return;
@@ -2953,73 +3097,6 @@ function soCurrentHole(top10){
 }
 
 // Auto-eliminate players after a hole is complete (admin-triggered)
-async function eliminateAfterHole(hole,top10){
-  const numElim=SO_ELIM_PER_HOLE[hole]||1;
-  // Only include players who are genuinely active right now (re-check live status)
-  const active=soActivePlayers(hole,top10).filter(g=>(shootoutSt[g.id]?.status||'active')==='active');
-  const scored=active.filter(g=>soScore(g.id,hole)!==null);
-  if(scored.length<active.length){
-    showToast('Not all active players have scored this hole yet.');
-    return;
-  }
-  if(!scored.length){
-    showToast('No active players with scores found for this hole.');
-    return;
-  }
-
-  // Sort by NET score descending (worst net first)
-  // Net = gross - handicap strokes on this hole
-  const hdcpIdx=WILD_HORSE.hdcp[hole-1];
-  const withNet=scored.map(g=>{
-    const gross=soScore(g.id,hole);
-    const strokes=getStrokes(g.hdcp,hdcpIdx,1.0);
-    const net=gross-strokes;
-    return {...g,gross,strokes,net};
-  });
-  const sorted=[...withNet].sort((a,b)=>b.net-a.net); // highest net (worst) first
-
-  // Check for ties at the elimination cut line
-  const cutNet=sorted[numElim-1].net;
-  const nextNet=sorted[numElim]?.net??null;
-
-  if(nextNet!==null && cutNet===nextNet){
-    const tiedNames=sorted.filter(g=>g.net===cutNet).map(g=>g.name.split(' ')[0]).join(' & ');
-    showToast(`⚠️ Tie at net ${cutNet} on Hole ${hole} (${tiedNames})! Putt-off required — eliminate manually after putt-off resolves.`);
-    return;
-  }
-
-  // Confirm
-  const elimNames=sorted.slice(0,numElim).map(g=>`${g.name.split(' ')[0]} (net ${g.net})`).join(' & ');
-  if(!confirm(`Eliminate ${elimNames} after Hole ${hole}?`)) return;
-
-  // Save eliminations
-  for(let i=0;i<numElim;i++){
-    const g=sorted[i];
-    await sb.from('shootout').upsert(
-      {golfer_id:g.id, status:'eliminated', eliminated_hole:hole},
-      {onConflict:'golfer_id'}
-    );
-    shootoutSt[g.id]={...(shootoutSt[g.id]||{}), status:'eliminated', eliminated_hole:hole};
-  }
-
-  // Check if only 1 active player remains = champion
-  const stillActive=top10.filter(g=>(shootoutSt[g.id]?.status||'active')==='active');
-  if(stillActive.length===1){
-    const champ=stillActive[0];
-    await sb.from('shootout').upsert(
-      {golfer_id:champ.id, status:'champion', eliminated_hole:null},
-      {onConflict:'golfer_id'}
-    );
-    shootoutSt[champ.id]={...(shootoutSt[champ.id]||{}), status:'champion'};
-    showToast(`🏆 ${champ.name} is the Shootout Champion!`);
-  } else {
-    showToast(`✓ ${sorted.slice(0,numElim).map(g=>g.name.split(' ')[0]).join(' & ')} eliminated after Hole ${hole}.`);
-  }
-
-  renderShootout();
-  shootoutCurrentHole=null; // let auto-detect advance to next hole
-}
-
 // Manual status cycle (admin can override)
 async function cycleSOStatus(gid,cur){
   const next=cur==='active'?'eliminated':cur==='eliminated'?'champion':'active';
