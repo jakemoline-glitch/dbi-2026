@@ -2674,33 +2674,42 @@ function soCurrentHole(top10){
 // Auto-eliminate players after a hole is complete (admin-triggered)
 async function eliminateAfterHole(hole,top10){
   const numElim=SO_ELIM_PER_HOLE[hole]||1;
-  const active=soActivePlayers(hole,top10);
+  // Only include players who are genuinely active right now (re-check live status)
+  const active=soActivePlayers(hole,top10).filter(g=>(shootoutSt[g.id]?.status||'active')==='active');
   const scored=active.filter(g=>soScore(g.id,hole)!==null);
   if(scored.length<active.length){
     showToast('Not all active players have scored this hole yet.');
     return;
   }
-
-  // Sort by score descending (worst first)
-  const sorted=[...scored].sort((a,b)=>{
-    const sa=soScore(a.id,hole);
-    const sb2=soScore(b.id,hole);
-    return sb2-sa; // highest (worst) score first
-  });
-
-  // Check for ties at the elimination cut line
-  const cutScore=soScore(sorted[numElim-1].id,hole);
-  const nextScore=sorted[numElim]?soScore(sorted[numElim].id,hole):null;
-
-  if(nextScore!==null && cutScore===nextScore){
-    // Tie at the cut — flag for putt-off, don't auto-eliminate
-    showToast(`⚠️ Tie at ${cutScore} on Hole ${hole}! Putt-off required. Eliminate manually after putt-off resolves.`);
+  if(!scored.length){
+    showToast('No active players with scores found for this hole.');
     return;
   }
 
-  // Confirm before eliminating
-  const names=sorted.slice(0,numElim).map(g=>g.name.split(' ')[0]).join(' & ');
-  if(!confirm(`Eliminate ${names} after Hole ${hole}? Their score${numElim>1?'s were':' was'} the highest.`)) return;
+  // Sort by NET score descending (worst net first)
+  // Net = gross - handicap strokes on this hole
+  const hdcpIdx=WILD_HORSE.hdcp[hole-1];
+  const withNet=scored.map(g=>{
+    const gross=soScore(g.id,hole);
+    const strokes=getStrokes(g.hdcp,hdcpIdx,1.0);
+    const net=gross-strokes;
+    return {...g,gross,strokes,net};
+  });
+  const sorted=[...withNet].sort((a,b)=>b.net-a.net); // highest net (worst) first
+
+  // Check for ties at the elimination cut line
+  const cutNet=sorted[numElim-1].net;
+  const nextNet=sorted[numElim]?.net??null;
+
+  if(nextNet!==null && cutNet===nextNet){
+    const tiedNames=sorted.filter(g=>g.net===cutNet).map(g=>g.name.split(' ')[0]).join(' & ');
+    showToast(`⚠️ Tie at net ${cutNet} on Hole ${hole} (${tiedNames})! Putt-off required — eliminate manually after putt-off resolves.`);
+    return;
+  }
+
+  // Confirm
+  const elimNames=sorted.slice(0,numElim).map(g=>`${g.name.split(' ')[0]} (net ${g.net})`).join(' & ');
+  if(!confirm(`Eliminate ${elimNames} after Hole ${hole}?`)) return;
 
   // Save eliminations
   for(let i=0;i<numElim;i++){
@@ -2713,11 +2722,7 @@ async function eliminateAfterHole(hole,top10){
   }
 
   // Check if only 1 active player remains = champion
-  const remaining=soActivePlayers(hole,top10).filter(g=>soIsActive(g.id,hole+1,top10)||hole===7);
-  const stillActive=top10.filter(g=>{
-    const st=shootoutSt[g.id]?.status||'active';
-    return st!=='eliminated';
-  });
+  const stillActive=top10.filter(g=>(shootoutSt[g.id]?.status||'active')==='active');
   if(stillActive.length===1){
     const champ=stillActive[0];
     await sb.from('shootout').upsert(
@@ -2727,7 +2732,7 @@ async function eliminateAfterHole(hole,top10){
     shootoutSt[champ.id]={...(shootoutSt[champ.id]||{}), status:'champion'};
     showToast(`🏆 ${champ.name} is the Shootout Champion!`);
   } else {
-    showToast(`✓ ${names} eliminated after Hole ${hole}.`);
+    showToast(`✓ ${sorted.slice(0,numElim).map(g=>g.name.split(' ')[0]).join(' & ')} eliminated after Hole ${hole}.`);
   }
 
   renderShootout();
