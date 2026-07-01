@@ -242,7 +242,7 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
     <button class="nav-btn" onclick="showTab('golfers',this)">📋 Golfers</button>
     <button class="nav-btn" onclick="showTab('agenda',this)">📅 Agenda</button>
     <button class="nav-btn" onclick="showTab('formats',this)">📖 Formats</button>
-    <button class="nav-btn admin-only" onclick="showTab('admin',this)" style="display:none;">⚡ Scoring</button>
+    <button class="nav-btn" onclick="showTab('admin',this)">⚡ Scoring</button>
     <button class="nav-btn admin-only" onclick="showTab('sheets',this)" style="display:none;">📊 Sheets</button>
   </div>
 </nav>
@@ -2856,23 +2856,21 @@ function renderScoringAdmin(){
   if(!div) return;
 
   let html=`
-  <div class="section-title">Score Admin</div>
-  <p class="section-sub">Finalize each round to generate DBI points. Admin only.</p>
+  <div class="section-title">⚡ Scoring</div>
+  <p class="section-sub">${IS_ADMIN?'Calculate DBI points, view projections, and manage scores.':'Live scoring projections for all rounds. Admins can calculate and finalize points.'}</p>`;
 
-  <!-- RESET PANEL -->
-  <div class="card" style="border:2px solid var(--red);margin-bottom:20px;">
+  // Reset panel — admin only
+  if(IS_ADMIN) html+=`<div class="card" style="border:2px solid var(--red);margin-bottom:20px;">
     <div class="card-header" style="background:var(--red);border-bottom:2px solid #6b0000;">
       <span>🗑️ Reset / Clear Scores</span><span class="badge" style="background:#6b0000;color:#ffaaaa;">Danger Zone</span>
     </div>
     <div class="card-body">
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Use these to wipe test scores before the real tournament. All actions require double confirmation and cannot be undone.</p>
-
       <div class="flex-gap" style="margin-bottom:14px;">
         <button class="btn btn-sm" onclick="resetEverything()" style="background:#3a0a0a;color:#ffcccc;border:2px solid #8b1a1a;padding:10px 20px;border-radius:2px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">
           ⚠️⚠️ Reset Everything (Scores + Team Cup)
         </button>
       </div>
-
       <div class="flex-gap" style="margin-bottom:12px;">
         <button class="btn btn-sm" onclick="resetAllScores()" style="background:#8b1a1a;color:#fff;border:none;padding:8px 18px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">
           ⚠️ Wipe ALL Scores (All Rounds)
@@ -2881,7 +2879,6 @@ function renderScoringAdmin(){
           ⚠️ Reset Team Cup Only (Captains/Teams/R3+R6 Lineups)
         </button>
       </div>
-
       <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;">Or clear individual rounds:</p>
       <div class="flex-gap">
         ${[1,2,3,4,5,6].map(r=>`<button class="btn btn-sm" onclick="resetRoundScores(${r})" style="background:var(--parchment);color:#8b1a1a;border:1px solid #f1aeb5;padding:6px 12px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">Clear R${r}</button>`).join('')}
@@ -2898,7 +2895,7 @@ function renderScoringAdmin(){
   html+=`<!-- R1 -->
   <div class="card"><div class="card-header" style="justify-content:space-between;">
     <span>Round 1 — Modified Stableford</span>
-    <button class="btn btn-gold btn-sm" onclick="runCalc(1)">⚡ Calculate &amp; Save Points</button>
+    ${IS_ADMIN?'<button class="btn btn-gold btn-sm" onclick="runCalc(1)">⚡ Calculate &amp; Save Points</button>':''}
   </div><div class="card-body">
     <p style="font-size:13px;color:var(--text-muted);">Auto-calculated from hole-by-hole scores. Make sure all 18 holes are entered for each golfer first.</p>
     ${renderR1Preview()}
@@ -2907,7 +2904,7 @@ function renderScoringAdmin(){
   <!-- R2 -->
   <div class="card"><div class="card-header" style="justify-content:space-between;">
     <span>Round 2 — 4-Person Scramble</span>
-    <button class="btn btn-gold btn-sm" onclick="runCalc(2)">⚡ Calculate &amp; Save Points</button>
+    ${IS_ADMIN?'<button class="btn btn-gold btn-sm" onclick="runCalc(2)">⚡ Calculate &amp; Save Points</button>':''}
   </div><div class="card-body">
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Team gross scores are pulled automatically from the scorecards tab. You can also enter manually here as a fallback.</p>
     <table class="data-table"><thead><tr><th>Group</th><th>Players</th><th>From Scorecard</th><th>Manual Override</th><th>Place</th><th>DBI Pts</th></tr></thead><tbody>
@@ -2930,10 +2927,10 @@ function renderScoringAdmin(){
   <!-- R3 -->
   <div class="card"><div class="card-header" style="justify-content:space-between;">
     <span>Round 3 — 2v2 Best Ball Nassau</span>
-    <button class="btn btn-gold btn-sm" onclick="runCalc(3)">⚡ Calculate &amp; Save Points</button>
+    ${IS_ADMIN?'<button class="btn btn-gold btn-sm" onclick="runCalc(3)">⚡ Calculate &amp; Save Points</button>':''}
   </div><div class="card-body">
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Best ball — each player enters individual scores on the scorecards tab. Results auto-calculate from that data; manual override available below if needed (Team A = players 1&amp;2, Team B = players 3&amp;4).</p>
-    <table class="data-table"><thead><tr><th>Match</th><th>Team A</th><th>Team B</th><th>Auto Status</th><th>Front 9 Override</th><th>Back 9 Override</th><th>Total Override</th><th>DBI Pts</th></tr></thead><tbody>
+    <table class="data-table"><thead><tr><th>Match</th><th>Team A</th><th>Team B</th><th>Auto Status</th>${IS_ADMIN?'<th>Front 9 Override</th><th>Back 9 Override</th><th>Total Override</th>':''}<th>DBI Pts</th></tr></thead><tbody>
     ${(pairingsData[3]||Array(5).fill(null)).slice(0,5).map((g,mi)=>{
       const pi=g?.player_indices||[];
       const nameA=[pi[0],pi[1]].map(i=>golfers[i]?.name?.split(' ')[0]||'?').join(' & ');
@@ -2959,7 +2956,7 @@ function renderScoringAdmin(){
       return `<tr><td><strong>Match ${mi+1}</strong></td>
         <td style="font-size:12px;">${nameA}</td><td style="font-size:12px;">${nameB}</td>
         <td>${autoStatusHtml}</td>
-        <td>${sel(`r3f_${mi}`,exF)}</td><td>${sel(`r3b_${mi}`,exB)}</td><td>${sel(`r3t_${mi}`,exT)}</td>
+        ${IS_ADMIN?`<td>${sel('r3f_'+mi,exF)}</td><td>${sel('r3b_'+mi,exB)}</td><td>${sel('r3t_'+mi,exT)}</td>`:''}
         <td>${dbi3}</td></tr>`;
     }).join('')}
     </tbody></table>
@@ -2968,7 +2965,7 @@ function renderScoringAdmin(){
   <!-- R4 -->
   <div class="card"><div class="card-header" style="justify-content:space-between;">
     <span>Round 4 — 4-Person Shamble (80% HDCP)</span>
-    <button class="btn btn-gold btn-sm" onclick="runCalc(4)">⚡ Calculate &amp; Save Points</button>
+    ${IS_ADMIN?'<button class="btn btn-gold btn-sm" onclick="runCalc(4)">⚡ Calculate &amp; Save Points</button>':''}
   </div><div class="card-body">
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Each player enters their individual hole scores on the scorecards tab. The 2 best net scores (80% HDCP) per hole are summed for the team total. Scores auto-calculate below.</p>
     <table class="data-table"><thead><tr><th>Group</th><th>Players (80% HDCP)</th><th>Holes Entered</th><th>Team Net (best 2/hole)</th><th>DBI Pts</th></tr></thead><tbody>
@@ -3004,7 +3001,7 @@ function renderScoringAdmin(){
   <!-- R5 -->
   <div class="card"><div class="card-header" style="justify-content:space-between;">
     <span>Round 5 — Individual Net Score</span>
-    <button class="btn btn-gold btn-sm" onclick="runCalc(5)">⚡ Calculate &amp; Save Points</button>
+    ${IS_ADMIN?'<button class="btn btn-gold btn-sm" onclick="runCalc(5)">⚡ Calculate &amp; Save Points</button>':''}
   </div><div class="card-body">
     <p style="font-size:13px;color:var(--text-muted);">Auto-calculated from hole-by-hole scores (Gross – Handicap). Make sure all 18 holes are entered first.</p>
     ${renderR5Preview()}
@@ -3013,11 +3010,11 @@ function renderScoringAdmin(){
   <!-- R6 -->
   <div class="card"><div class="card-header" style="justify-content:space-between;">
     <span>Round 6 — 2v2 Scramble Match Play Nassau</span>
-    <button class="btn btn-gold btn-sm" onclick="runCalc(6)">⚡ Calculate &amp; Save Points</button>
+    ${IS_ADMIN?'<button class="btn btn-gold btn-sm" onclick="runCalc(6)">⚡ Calculate &amp; Save Points</button>':''}
   </div><div class="card-body">
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Team scramble — one score per hole per team. Combined team HDCP = A-player (70%) + B-player (30%). Results auto-calculate from scorecard data entered on the scorecards tab; manual override available below if needed.</p>
     <p style="font-size:12px;color:var(--gold);margin-bottom:12px;"><strong>Step 1:</strong> Calculate match points here (3 pts per Nassau bet won, 1.5 for a tie, max 9 per player). <strong>Step 2:</strong> Go to ⚔️ Team Cup to award the +5 bonus to the overall Team Cup winners once R6 is complete.</p>
-    <table class="data-table"><thead><tr><th>Match</th><th>Team A (Combined HDCP)</th><th>Team B (Combined HDCP)</th><th>Auto Status</th><th>Front 9 Override</th><th>Back 9 Override</th><th>Total Override</th><th>DBI Pts</th></tr></thead><tbody>
+    <table class="data-table"><thead><tr><th>Match</th><th>Team A (Combined HDCP)</th><th>Team B (Combined HDCP)</th><th>Auto Status</th>${IS_ADMIN?'<th>Front 9 Override</th><th>Back 9 Override</th><th>Total Override</th>':''}<th>DBI Pts</th></tr></thead><tbody>
     ${(pairingsData[6]||Array(5).fill(null)).slice(0,5).map((g,mi)=>{
       const pi=g?.player_indices||[];
       const teams=getMatchTeams(6,mi);
@@ -3044,7 +3041,7 @@ function renderScoringAdmin(){
       return `<tr><td><strong>Match ${mi+1}</strong></td>
         <td style="font-size:12px;color:#0a5c36;">${nameA}</td><td style="font-size:12px;color:#8b1a1a;">${nameB}</td>
         <td>${autoStatusHtml}</td>
-        <td>${sel(`r6f_${mi}`,exF)}</td><td>${sel(`r6b_${mi}`,exB)}</td><td>${sel(`r6t_${mi}`,exT)}</td>
+        ${IS_ADMIN?`<td>${sel('r6f_'+mi,exF)}</td><td>${sel('r6b_'+mi,exB)}</td><td>${sel('r6t_'+mi,exT)}</td>`:''}
         <td>${dbi6}</td></tr>`;
     }).join('')}
     </tbody></table>
