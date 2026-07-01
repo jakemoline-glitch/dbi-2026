@@ -2514,12 +2514,17 @@ function renderShootoutScorecard(top10){
       const active=soActivePlayers(h,top10);
       const allScored=active.length>0&&active.every(g=>soScore(g.id,h)!==null);
       const numElim=SO_ELIM_PER_HOLE[h]||1;
-      const alreadyElimHere=top10.filter(g=>{
+      // Count anyone eliminated ON this hole (auto or manual)
+      const elimOnThisHole=top10.filter(g=>{
         const so=shootoutSt[g.id];
-        return so?.status==='eliminated'&&so?.eliminated_hole===h;
+        return so?.status==='eliminated'&&parseInt(so?.eliminated_hole)===h;
       });
-      if(alreadyElimHere.length>=numElim){
-        html+=`<span style="font-size:11px;padding:5px 10px;background:#e8f0ff;border-radius:2px;color:#0a5c36;font-weight:600;">H${h} ✓ Done</span>`;
+      // Lock this hole entirely if ANY elimination has happened here (manual or auto)
+      const holeLocked=elimOnThisHole.length>0;
+
+      if(holeLocked){
+        const doneLabel=elimOnThisHole.length>=numElim?'✓ Done':`✓ ${elimOnThisHole.length}/${numElim} out`;
+        html+=`<span style="font-size:11px;padding:5px 10px;background:#e8f0ff;border-radius:2px;color:#0a5c36;font-weight:600;">H${h} ${doneLabel}</span>`;
       } else if(allScored){
         html+=`<button onclick="eliminateAfterHole(${h},soTop10())" class="btn btn-sm" style="background:#8b1a1a;color:white;border:none;padding:6px 12px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">
           ⚡ Eliminate after H${h} (${numElim} out)
