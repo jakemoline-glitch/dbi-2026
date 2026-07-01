@@ -236,12 +236,13 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
     <button class="nav-btn" onclick="showTab('myscores',this)">✏️ My Scorecard</button>
     <button class="nav-btn" onclick="showTab('scorecard',this)">⛳ All Scorecards</button>
     <button class="nav-btn" onclick="showTab('pairings',this)">👥 Pairings</button>
+    <button class="nav-btn" onclick="showTab('calcutta',this)">💰 Calcutta</button>
     <button class="nav-btn" onclick="showTab('team',this)">⚔️ Team Cup</button>
     <button class="nav-btn" onclick="showTab('shootout',this)">🎯 Shootout</button>
     <button class="nav-btn" onclick="showTab('golfers',this)">📋 Golfers</button>
     <button class="nav-btn" onclick="showTab('agenda',this)">📅 Agenda</button>
     <button class="nav-btn" onclick="showTab('formats',this)">📖 Formats</button>
-    <button class="nav-btn" onclick="showTab('admin',this)">⚡ Scoring</button>
+    <button class="nav-btn admin-only" onclick="showTab('admin',this)" style="display:none;">⚡ Scoring</button>
     <button class="nav-btn admin-only" onclick="showTab('sheets',this)" style="display:none;">📊 Sheets</button>
   </div>
 </nav>
@@ -427,6 +428,13 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
   </div></div>
 </div>
 
+<!-- CALCUTTA -->
+<div id="tab-calcutta" class="tab-content">
+  <div class="section-title">💰 Calcutta Auction</div>
+  <p class="section-sub">Night 1 · Assign buyers and ownership percentages for each golfer. Top 2 spenders become team captains.</p>
+  <div id="calcutta-content"></div>
+</div>
+
 <!-- TEAM CUP -->
 <div id="tab-team" class="tab-content">
   <div class="section-title">⚔️ Team Cup</div>
@@ -533,6 +541,7 @@ const RVENUES=['','Wild Horse','Wild Horse','Bayside','Bayside','Wild Horse','Wi
 
 let ME=null,golfers=[],holeScores={},roundResults={},pairingsData={},shootoutSt={};
 let shootoutHoleScores={}; // {golfer_id: {hole: score}}
+let calcuttaData=[]; // array of {id, golfer_id, buyer_name, percentage, amount, notes}
 let teamComp={team_a_name:'Team A',team_b_name:'Team B',team_a_captain_id:null,team_b_captain_id:null};
 let teamPlayers={}; // {golfer_id: 'A'|'B'}
 let teamMatches={}; // {round: {match_num: {a1,a2,b1,b2}}}
@@ -615,7 +624,7 @@ async function enterApp(){
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display=IS_ADMIN?'':'none');
   await loadAll();
   setupRealtime();
-  renderLB();renderMyScores(1);renderSC(1);renderPairings(1);renderShootout();renderGolfers();renderScoringAdmin();renderTeamCup();
+  renderLB();renderMyScores(1);renderSC(1);renderPairings(1);renderShootout();renderGolfers();renderScoringAdmin();renderTeamCup();renderCalcutta();
 }
 
 async function loadAll(){
@@ -646,7 +655,7 @@ async function loadAll(){
     return {data:allRows, error:null};
   }
 
-  const [hs,rr,pr,so,tc,tp,tm,shs]=await Promise.all([
+  const [hs,rr,pr,so,tc,tp,tm,shs,ca]=await Promise.all([
     fetchAllHoleScores(),
     sb.from('round_results').select('*'),
     sb.from('pairings').select('*').order('group_num'),
@@ -655,9 +664,10 @@ async function loadAll(){
     sb.from('team_players').select('*'),
     sb.from('team_matches').select('*'),
     sb.from('shootout_hole_scores').select('*'),
+    sb.from('calcutta').select('*').order('golfer_id'),
   ]);
   // Surface any load errors instead of silently showing empty data
-  const loadErrors=[hs,rr,pr,so,tc,tp,tm,shs].filter(r=>r.error).map(r=>r.error.message);
+  const loadErrors=[hs,rr,pr,so,tc,tp,tm,shs,ca].filter(r=>r.error).map(r=>r.error.message);
   if(loadErrors.length){
     console.error('loadAll errors:',loadErrors);
     showToast(`⚠️ Some data failed to load: ${loadErrors[0]}`);
@@ -732,6 +742,8 @@ async function loadAll(){
   });
   // Sync team matches into pairings data for R3/R6
   syncTeamMatchesToPairings();
+  // Calcutta
+  calcuttaData=ca.data||[];
 }
 
 function setupRealtime(){
@@ -776,6 +788,11 @@ function setupRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'shootout'},async()=>{
       const {data}=await sb.from('shootout').select('*');
       shootoutSt={};(data||[]).forEach(s=>{shootoutSt[s.golfer_id]=s;});renderShootout();
+    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'calcutta'},async()=>{
+      const {data}=await sb.from('calcutta').select('*').order('golfer_id');
+      calcuttaData=data||[];
+      if(document.getElementById('tab-calcutta')?.classList.contains('active'))renderCalcutta();
     })
     .on('postgres_changes',{event:'*',schema:'public',table:'shootout_hole_scores'},async()=>{
       const {data}=await sb.from('shootout_hole_scores').select('*');
@@ -2144,11 +2161,11 @@ function showPairRound(r,btn){
 function renderPairings(r){
   const grps=pairingsData[r]||[];
   const matchR=[3,6];const isMatch=matchR.includes(r);
-  const isLocked=(r===3||r===6)&&!IS_ADMIN;
+  const isLocked=!IS_ADMIN; // only admins (Jake, Adam, Ryan) can edit pairings
   let html='';
   if(isLocked){
     html+=`<div class="format-box" style="border-left-color:var(--gold);">
-      <strong>Rounds 3 &amp; 6 pairings</strong> are set by the admin after the in-person draft. Check back here once they have been entered!
+      Pairings are managed by the tournament admins. Check back here once they've been set.
     </div>`;
   }
   for(let gi=0;gi<5;gi++){
@@ -3263,6 +3280,315 @@ function calcTeamRoundPoints(r){
 
 // ===================== TEAM CUP RENDERER =====================
 
+// ===================== CALCUTTA =====================
+
+function renderCalcutta(){
+  const div=document.getElementById('calcutta-content');
+  if(!div) return;
+
+  const byGolfer={};
+  calcuttaData.forEach(c=>{
+    if(!byGolfer[c.golfer_id]) byGolfer[c.golfer_id]={entries:[],totalPct:0,totalAmt:0};
+    byGolfer[c.golfer_id].entries.push(c);
+    byGolfer[c.golfer_id].totalPct+=parseFloat(c.percentage);
+    byGolfer[c.golfer_id].totalAmt+=parseFloat(c.amount);
+  });
+
+  const buyerTotals={};
+  calcuttaData.forEach(c=>{
+    if(!buyerTotals[c.buyer_name]) buyerTotals[c.buyer_name]=0;
+    buyerTotals[c.buyer_name]+=parseFloat(c.amount);
+  });
+  const buyerRanked=Object.entries(buyerTotals).sort((a,b)=>b[1]-a[1]);
+  const topBuyer=buyerRanked[0]?.[0];
+  const secondBuyer=buyerRanked[1]?.[0];
+  const totalPot=calcuttaData.reduce((s,c)=>s+parseFloat(c.amount),0);
+
+  let html='';
+
+  // Summary cards
+  html+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:20px;">
+    <div class="card" style="background:var(--navy);color:white;">
+      <div class="card-body" style="text-align:center;">
+        <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--gold-light);margin-bottom:6px;">Total Pot</div>
+        <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:var(--gold);">$${totalPot.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+      </div>
+    </div>
+    ${topBuyer?`<div class="card" style="background:#0a2e18;color:white;">
+      <div class="card-body" style="text-align:center;">
+        <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#70d490;margin-bottom:4px;">Top Spender · Captain A</div>
+        <div style="font-size:18px;font-weight:700;color:#70d490;">${topBuyer}</div>
+        <div style="font-size:14px;color:rgba(255,255,255,0.6);">$${buyerTotals[topBuyer].toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+      </div>
+    </div>`:''}
+    ${secondBuyer?`<div class="card" style="background:#3a0a0a;color:white;">
+      <div class="card-body" style="text-align:center;">
+        <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#f08080;margin-bottom:4px;">2nd Spender · Captain B</div>
+        <div style="font-size:18px;font-weight:700;color:#f08080;">${secondBuyer}</div>
+        <div style="font-size:14px;color:rgba(255,255,255,0.6);">$${buyerTotals[secondBuyer].toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+      </div>
+    </div>`:''}
+  </div>`;
+
+  // Add entry form
+  html+=`<div class="card" style="margin-bottom:20px;">
+    <div class="card-header"><span>➕ Add Auction Entry</span></div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr 70px 90px 1fr auto;gap:10px;align-items:end;">
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Golfer</label>
+          <select id="ca-golfer" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:7px 8px;font-size:12px;font-family:'Inter',sans-serif;">
+            <option value="">Select golfer...</option>
+            ${golfers.map(g=>{
+              const sold=byGolfer[g.id];
+              const pctSold=sold?sold.totalPct:0;
+              const pctLeft=Math.max(0,100-pctSold);
+              return `<option value="${g.id}">${g.name} (${g.hdcp})${pctSold>0?` — ${pctLeft.toFixed(0)}% left`:''}${pctLeft<=0?' ✓':''}</option>`;
+            }).join('')}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Buyer Name</label>
+          <input type="text" id="ca-buyer" placeholder="e.g. Jake Moline" list="ca-buyer-list"
+            style="width:100%;border:1px solid var(--border);border-radius:2px;padding:7px 8px;font-size:12px;font-family:'Inter',sans-serif;">
+          <datalist id="ca-buyer-list">
+            ${golfers.map(g=>`<option value="${g.name}">`).join('')}
+            ${[...new Set(calcuttaData.map(c=>c.buyer_name))].filter(n=>!golfers.find(g=>g.name===n)).map(n=>`<option value="${n}">`).join('')}
+          </datalist>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">%</label>
+          <input type="number" id="ca-pct" placeholder="100" min="1" max="100" step="1"
+            style="width:100%;border:1px solid var(--border);border-radius:2px;padding:7px 8px;font-size:12px;font-family:'Inter',sans-serif;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">$ Amount</label>
+          <input type="number" id="ca-amt" placeholder="0" min="0" step="1"
+            style="width:100%;border:1px solid var(--border);border-radius:2px;padding:7px 8px;font-size:12px;font-family:'Inter',sans-serif;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Notes (optional)</label>
+          <input type="text" id="ca-notes" placeholder="e.g. split with Ryan"
+            style="width:100%;border:1px solid var(--border);border-radius:2px;padding:7px 8px;font-size:12px;font-family:'Inter',sans-serif;">
+        </div>
+        <div style="padding-bottom:1px;">
+          <button class="btn btn-gold" onclick="addCalcuttaEntry()" style="padding:8px 14px;white-space:nowrap;">Add</button>
+        </div>
+      </div>
+      <div id="ca-error" style="color:var(--red);font-size:12px;margin-top:8px;display:none;"></div>
+    </div>
+  </div>`;
+
+  // Golfer breakdown table — sorted by total sale price descending
+  const sortedGolfers=[...golfers].sort((a,b)=>(byGolfer[b.id]?.totalAmt||0)-(byGolfer[a.id]?.totalAmt||0));
+  html+=`<div class="card"><div class="card-header"><span>Auction Results by Golfer</span>
+    <span class="badge">${Object.keys(byGolfer).length}/${golfers.length} sold</span>
+  </div><div style="overflow-x:auto;"><table class="data-table"><thead><tr>
+    <th>Golfer</th><th>HDCP</th><th>Buyer</th><th>%</th><th>$ Paid</th><th>Notes</th>${IS_ADMIN?'<th></th>':''}
+  </tr></thead><tbody>`;
+
+  sortedGolfers.forEach(g=>{
+    const gData=byGolfer[g.id];
+    if(!gData||!gData.entries.length){
+      html+=`<tr style="opacity:0.35;"><td colspan="${IS_ADMIN?7:6}" style="color:var(--text-muted);font-style:italic;font-size:11px;padding:5px 10px;">${g.name} (HDCP ${g.hdcp}) — not yet sold</td></tr>`;
+      return;
+    }
+    const pctSold=gData.totalPct;
+    const pctBar=`<div style="margin-top:3px;height:3px;width:100%;background:#eee;border-radius:1px;"><div style="height:3px;width:${Math.min(100,pctSold)}%;background:${pctSold>=100?'#0a5c36':'#c9a227'};border-radius:1px;"></div></div>`;
+    gData.entries.forEach((entry,idx)=>{
+      const isFirst=idx===0;
+      html+=`<tr style="${isFirst?'border-top:2px solid var(--border);':''}">
+        ${isFirst?`<td rowspan="${gData.entries.length}" style="vertical-align:top;padding-top:9px;">
+          <span style="font-weight:700;">${g.name}</span>
+          <div style="font-size:10px;color:var(--text-muted);">$${gData.totalAmt.toLocaleString('en-US',{minimumFractionDigits:0})} total · ${pctSold.toFixed(0)}% sold</div>
+          ${pctBar}
+        </td>`:''}
+        ${isFirst?`<td rowspan="${gData.entries.length}" style="vertical-align:top;padding-top:9px;">${g.hdcp}</td>`:''}
+        <td style="font-weight:600;">${entry.buyer_name}</td>
+        <td style="font-weight:700;color:var(--navy);">${parseFloat(entry.percentage).toFixed(0)}%</td>
+        <td style="font-weight:700;color:#0a5c36;">$${parseFloat(entry.amount).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</td>
+        <td style="font-size:11px;color:var(--text-muted);">${entry.notes||''}</td>
+        ${IS_ADMIN?`<td style="padding:2px 6px;"><button onclick="deleteCalcuttaEntry(${entry.id})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 6px;" title="Delete">✕</button></td>`:''}
+      </tr>`;
+    });
+  });
+  html+=`</tbody></table></div></div>`;
+
+  // Buyer leaderboard
+  if(buyerRanked.length){
+    html+=`<div class="card" style="margin-top:16px;"><div class="card-header"><span>💸 Buyer Leaderboard</span></div><div style="padding:0;">`;
+    buyerRanked.forEach(([name,amt],i)=>{
+      const isTop=i===0,isSecond=i===1;
+      const bg=isTop?'#0a2e18':isSecond?'#3a0a0a':'';
+      const col=isTop?'#70d490':isSecond?'#f08080':'var(--text)';
+      const label=isTop?'👑 Captain A':isSecond?'👑 Captain B':`${i+1}.`;
+      const owned=calcuttaData.filter(c=>c.buyer_name===name);
+      const golferNames=[...new Set(owned.map(c=>golfers.find(g=>g.id===c.golfer_id)?.name?.split(' ')[0]||'?'))];
+      html+=`<div style="display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:1px solid ${bg?'rgba(255,255,255,0.1)':'var(--border)'};background:${bg};">
+        <div style="font-size:15px;font-weight:700;color:${bg?col:'var(--text-muted)'};min-width:90px;">${label}</div>
+        <div style="flex:1;">
+          <div style="font-weight:700;font-size:14px;color:${bg?'white':'var(--text)'};">${name}</div>
+          <div style="font-size:11px;color:${bg?'rgba(255,255,255,0.5)':'var(--text-muted)'};">Owns pieces of: ${golferNames.join(', ')||'—'}</div>
+        </div>
+        <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:${bg?'var(--gold)':'var(--navy)'};">$${amt.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+  }
+
+  // ---- PAYOUT SECTION ----
+  const PAYOUT_PCTS=[
+    {place:1,pct:31.5,label:'1st Place'},
+    {place:2,pct:22.5,label:'2nd Place'},
+    {place:3,pct:18.0,label:'3rd Place'},
+    {place:4,pct:13.5,label:'4th Place'},
+    {place:5,pct:4.5, label:'5th Place'},
+  ];
+  const CHARITY_PCT=10;
+  const rankedGolfers=[...golfers].map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total);
+  const rankedWithTies=assignRanks(rankedGolfers,g=>g.total,false);
+  const roundsScored=[1,2,3,4,5,6].filter(r=>roundResults[r]&&Object.keys(roundResults[r]).length>0).length;
+  const isComplete=roundsScored===6;
+  const charity=totalPot*(CHARITY_PCT/100);
+
+  html+=`<div class="card" style="margin-top:16px;">
+    <div class="card-header" style="justify-content:space-between;">
+      <span>💵 Calcutta Payouts</span>
+      <span class="badge" style="background:${isComplete?'#0a5c36':'#8b6914'};color:white;">
+        ${isComplete?'✓ Final':'⏳ Projected — '+roundsScored+'/6 rounds complete'}
+      </span>
+    </div>
+    <div style="padding:0;">`;
+
+  // Charity row
+  html+=`<div style="display:flex;align-items:center;gap:14px;padding:14px 18px;background:#f8f4ec;border-bottom:2px solid var(--border);">
+    <div style="font-size:22px;">❤️</div>
+    <div style="flex:1;">
+      <div style="font-weight:700;font-size:14px;">Charity (Winner's Choice)</div>
+      <div style="font-size:11px;color:var(--text-muted);">${CHARITY_PCT}% of pot · Donated by 1st place finisher</div>
+    </div>
+    <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#0a5c36;">
+      ${totalPot?'$'+charity.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'$—'}
+    </div>
+  </div>`;
+
+  // Place-by-place payouts
+  const placesHandled=new Set();
+  PAYOUT_PCTS.forEach(({place,pct,label})=>{
+    if(placesHandled.has(place)) return;
+    const atPlace=rankedWithTies.filter(g=>g.rank===place);
+    const tiedCount=atPlace.length||1;
+    // Pool pcts for all tied positions
+    let poolPct=0;
+    for(let i=0;i<tiedCount;i++){
+      const pp=PAYOUT_PCTS.find(p=>p.place===place+i);
+      if(pp){poolPct+=pp.pct;placesHandled.add(place+i);}
+    }
+    const perGolferPct=poolPct/tiedCount;
+    placesHandled.add(place);
+
+    if(!atPlace.length){
+      html+=`<div style="padding:12px 18px;border-bottom:1px solid var(--border);opacity:0.4;">
+        <div style="font-weight:600;color:var(--text-muted);">${label} — not yet determined</div>
+      </div>`;
+      return;
+    }
+
+    const placeMedal=place===1?'🥇':place===2?'🥈':place===3?'🥉':place===4?'4️⃣':'5️⃣';
+    const placeColor=place===1?'#c9a227':place===2?'#888':place===3?'#8b6914':'var(--text-muted)';
+    const isTied=tiedCount>1;
+
+    atPlace.forEach(g=>{
+      const golferPayout=totalPot*(perGolferPct/100);
+      const owners=(byGolfer[g.id]?.entries||[]);
+      html+=`<div style="border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;background:#fafaf7;">
+          <div style="font-size:22px;">${placeMedal}</div>
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:14px;">${label}${isTied?` <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(tied)</span>`:''} — ${g.name}</div>
+            <div style="font-size:11px;color:var(--text-muted);">${g.total} DBI pts · ${perGolferPct.toFixed(1)}% of pot${isTied?` (split ${tiedCount} ways)`:''}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:${placeColor};">
+              ${totalPot?'$'+golferPayout.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'$—'}
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);">ownership pool payout</div>
+          </div>
+        </div>
+        ${owners.length?`<div style="padding:2px 18px 10px 54px;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <tr style="color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;">
+              <td style="padding:3px 0;">Buyer</td><td style="padding:3px 8px;">Stake</td><td style="padding:3px 0;text-align:right;">Payout</td>
+            </tr>
+            ${owners.map(o=>{
+              const op=golferPayout*(parseFloat(o.percentage)/100);
+              return `<tr style="border-top:1px solid #f0ece0;">
+                <td style="padding:5px 0;font-weight:600;">${o.buyer_name}</td>
+                <td style="padding:5px 8px;color:var(--text-muted);">${parseFloat(o.percentage).toFixed(0)}%</td>
+                <td style="padding:5px 0;text-align:right;font-weight:700;color:#0a5c36;">
+                  ${totalPot?'$'+op.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}
+                </td>
+              </tr>`;
+            }).join('')}
+          </table>
+        </div>`:'<div style="padding:2px 18px 10px 54px;font-size:12px;color:var(--text-muted);font-style:italic;">No ownership recorded.</div>'}
+      </div>`;
+    });
+  });
+
+  html+=`<div style="padding:12px 18px;background:var(--navy);display:flex;justify-content:space-between;align-items:center;border-radius:0 0 2px 2px;">
+    <span style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;">Total Distributed</span>
+    <span style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--gold);">
+      ${totalPot?'$'+(totalPot).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}
+    </span>
+  </div></div>`;
+
+  div.innerHTML=html;
+}
+
+async function addCalcuttaEntry(){
+  const golferId=parseInt(document.getElementById('ca-golfer')?.value);
+  const buyerName=(document.getElementById('ca-buyer')?.value||'').trim();
+  const pct=parseFloat(document.getElementById('ca-pct')?.value);
+  const amt=parseFloat(document.getElementById('ca-amt')?.value);
+  const notes=(document.getElementById('ca-notes')?.value||'').trim();
+  const errEl=document.getElementById('ca-error');
+  errEl.style.display='none';
+
+  if(!golferId){errEl.textContent='Please select a golfer.';errEl.style.display='';return;}
+  if(!buyerName){errEl.textContent='Please enter a buyer name.';errEl.style.display='';return;}
+  if(!pct||pct<=0||pct>100){errEl.textContent='Percentage must be between 1 and 100.';errEl.style.display='';return;}
+  if(isNaN(amt)||amt<0){errEl.textContent='Please enter a valid dollar amount.';errEl.style.display='';return;}
+
+  const existingPct=calcuttaData.filter(c=>c.golfer_id===golferId).reduce((s,c)=>s+parseFloat(c.percentage),0);
+  if(existingPct+pct>100.01){
+    errEl.textContent=`Only ${(100-existingPct).toFixed(0)}% remaining for this golfer.`;
+    errEl.style.display='';return;
+  }
+
+  const {data,error}=await sb.from('calcutta').insert({golfer_id:golferId,buyer_name:buyerName,percentage:pct,amount:amt,notes:notes||null}).select();
+  if(error){showToast(`⚠️ Save failed: ${error.message}`);return;}
+  calcuttaData.push(...(data||[]));
+  document.getElementById('ca-buyer').value='';
+  document.getElementById('ca-pct').value='';
+  document.getElementById('ca-amt').value='';
+  document.getElementById('ca-notes').value='';
+  renderCalcutta();
+  showToast('✓ Entry added!');
+}
+
+async function deleteCalcuttaEntry(id){
+  if(!IS_ADMIN){showToast('Admin only.');return;}
+  if(!confirm('Delete this Calcutta entry?')) return;
+  const {error}=await sb.from('calcutta').delete().eq('id',id);
+  if(error){showToast(`⚠️ Delete failed: ${error.message}`);return;}
+  calcuttaData=calcuttaData.filter(c=>c.id!==id);
+  renderCalcutta();
+  showToast('✓ Entry deleted.');
+}
+
+// ===================== END CALCUTTA =====================
+
 async function renderTeamCup(){
   const div=document.getElementById('team-cup-content');
   if(!div) return;
@@ -3532,6 +3858,7 @@ function showTab(t,btn){
   if(t==='shootout')renderShootout();
   if(t==='pairings')renderPairings(curPairR);
   if(t==='team')renderTeamCup();
+  if(t==='calcutta')renderCalcutta();
   if(t==='myscores')renderMyScores(curMyR);
   if(t==='golfers'){
     const desc=document.getElementById('golfers-desc');
