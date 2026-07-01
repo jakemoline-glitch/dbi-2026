@@ -331,9 +331,11 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
   <div class="section-title">🎯 Shootout</div>
   <p class="section-sub">Top 10 point earners · Wednesday July 8, 7:00pm · Wild Horse</p>
   <div class="format-box" style="border-left-color:var(--gold);">
-    <strong>Rules:</strong> 7 holes. Seeds 7–10 enter Hole 1 · Seeds 5–6 enter Hole 2 · Seeds 3–4 enter Hole 3 · Seed 2 enters Hole 4 · Seed 1 enters Hole 5.<br>
-    Holes 1–2: 2 highest scores eliminated per hole. Holes 3–7: 1 eliminated per hole. Ties → putt-off.<br>
-    Mulligans: HDCP 20–23 = 1 · HDCP 24+ = 2. Not usable on the putting surface. If hit, must be taken.
+    <strong>7 holes · Wild Horse · Top 10 qualifiers</strong><br>
+    <strong>Entry:</strong> Seeds 7–10 → Hole 1 · Seeds 5–6 → Hole 2 · Seeds 3–4 → Hole 3 · Seed 2 → Hole 4 · Seed 1 → Hole 5<br>
+    <strong>Eliminations:</strong> Holes 1–2: 2 eliminated each · Holes 3–7: 1 eliminated each · Final player standing = 🏆 Champion<br>
+    <strong>Ties:</strong> Putt-off — tied players putt until one misses · if hit, mulligan must be taken<br>
+    <strong>Mulligans:</strong> HDCP 20–23 = 1 · HDCP 24+ = 2 · Not usable on the putting surface
   </div>
   <div id="shootout-manual-wrap"></div>
   <div class="card">
@@ -433,8 +435,82 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
     <p style="font-size:13px;"><strong>2v2 Scramble Match Play — Nassau.</strong> One ball, one score per hole per team. Combined team HDCP = A-Player (70%) + B-Player (30%). Lower combined HDCP team gives strokes to the higher combined HDCP team, allocated by hole difficulty. Lower net score on each hole wins.</p>
     <div class="pl"><div class="pl-item">Front 9 Win→3 pts</div><div class="pl-item">Back 9 Win→3</div><div class="pl-item">Total Win→3</div><div class="pl-item">Winning team bonus→3</div></div>
   </div></div>
-  <div class="card"><div class="card-header" style="background:var(--gold);color:var(--dark);"><span>🎯 Shootout</span><span class="badge" style="background:var(--dark);color:var(--gold);">Wed 7pm</span></div><div class="card-body">
-    <p style="font-size:13px;">Top 10 qualifiers. Entry by seed: 7–10=Hole 1 · 5–6=Hole 2 · 3–4=Hole 3 · 2=Hole 4 · 1=Hole 5. Holes 1–2: 2 eliminated. Holes 3–7: 1 eliminated. Ties → putt-off. Mulligans: HDCP 20–23=1 · 24+=2. Cannot use on putting surface — if hit, must be taken.</p>
+  <div class="card"><div class="card-header" style="background:var(--gold);color:var(--dark);"><span>🎯 Shootout</span><span class="badge" style="background:var(--dark);color:var(--gold);">Wed 7pm · Wild Horse</span></div><div class="card-body">
+    <p style="font-size:13px;margin-bottom:14px;">The top 10 DBI point earners after all 6 rounds advance to the Shootout — a head-to-head elimination event played on the first 7 holes of Wild Horse. Lower seed = better finishing position = later entry = bigger advantage.</p>
+
+    <div style="font-weight:700;font-size:12px;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Entry Points by Seed</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px;">
+      <div style="background:#f8f4ec;border-radius:2px;padding:8px 12px;border-left:3px solid var(--gold);">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Seed 1 (1st place)</div>
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">Enters Hole 5</div>
+        <div style="font-size:11px;color:var(--text-muted);">Skips elimination holes 1–4</div>
+      </div>
+      <div style="background:#f8f4ec;border-radius:2px;padding:8px 12px;border-left:3px solid #aaa;">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Seed 2 (2nd place)</div>
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">Enters Hole 4</div>
+        <div style="font-size:11px;color:var(--text-muted);">Skips elimination holes 1–3</div>
+      </div>
+      <div style="background:#f8f4ec;border-radius:2px;padding:8px 12px;border-left:3px solid #8b6914;">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Seeds 3–4 (3rd–4th)</div>
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">Enter Hole 3</div>
+        <div style="font-size:11px;color:var(--text-muted);">Skips elimination holes 1–2</div>
+      </div>
+      <div style="background:#f8f4ec;border-radius:2px;padding:8px 12px;border-left:3px solid #555;">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Seeds 5–6 (5th–6th)</div>
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">Enter Hole 2</div>
+        <div style="font-size:11px;color:var(--text-muted);">Skips elimination hole 1</div>
+      </div>
+      <div style="background:#f8f4ec;border-radius:2px;padding:8px 12px;border-left:3px solid #333;grid-column:1/-1;">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Seeds 7–10 (7th–10th)</div>
+        <div style="font-size:15px;font-weight:700;color:var(--navy);">Enter Hole 1</div>
+        <div style="font-size:11px;color:var(--text-muted);">Play all 7 holes — the gauntlet starts from the beginning</div>
+      </div>
+    </div>
+
+    <div style="font-weight:700;font-size:12px;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Elimination Schedule</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px;">
+      <thead><tr style="background:var(--navy);color:var(--gold-light);">
+        <th style="padding:7px 10px;text-align:left;">Hole</th>
+        <th style="padding:7px 10px;text-align:left;">New Entrants</th>
+        <th style="padding:7px 10px;text-align:center;">Active</th>
+        <th style="padding:7px 10px;text-align:center;">Eliminated</th>
+        <th style="padding:7px 10px;text-align:center;">Remaining</th>
+      </tr></thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #ede8da;"><td style="padding:7px 10px;font-weight:700;">Hole 1</td><td style="padding:7px 10px;color:var(--text-muted);">Seeds 7–10</td><td style="padding:7px 10px;text-align:center;">4</td><td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--red);">2 out</td><td style="padding:7px 10px;text-align:center;font-weight:700;">2</td></tr>
+        <tr style="border-bottom:1px solid #ede8da;background:#fafaf7;"><td style="padding:7px 10px;font-weight:700;">Hole 2</td><td style="padding:7px 10px;color:var(--text-muted);">Seeds 5–6</td><td style="padding:7px 10px;text-align:center;">4</td><td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--red);">2 out</td><td style="padding:7px 10px;text-align:center;font-weight:700;">2</td></tr>
+        <tr style="border-bottom:1px solid #ede8da;"><td style="padding:7px 10px;font-weight:700;">Hole 3</td><td style="padding:7px 10px;color:var(--text-muted);">Seeds 3–4</td><td style="padding:7px 10px;text-align:center;">4</td><td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--red);">1 out</td><td style="padding:7px 10px;text-align:center;font-weight:700;">3</td></tr>
+        <tr style="border-bottom:1px solid #ede8da;background:#fafaf7;"><td style="padding:7px 10px;font-weight:700;">Hole 4</td><td style="padding:7px 10px;color:var(--text-muted);">Seed 2</td><td style="padding:7px 10px;text-align:center;">4</td><td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--red);">1 out</td><td style="padding:7px 10px;text-align:center;font-weight:700;">3</td></tr>
+        <tr style="border-bottom:1px solid #ede8da;"><td style="padding:7px 10px;font-weight:700;">Hole 5</td><td style="padding:7px 10px;color:var(--text-muted);">Seed 1</td><td style="padding:7px 10px;text-align:center;">4</td><td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--red);">1 out</td><td style="padding:7px 10px;text-align:center;font-weight:700;">3</td></tr>
+        <tr style="border-bottom:1px solid #ede8da;background:#fafaf7;"><td style="padding:7px 10px;font-weight:700;">Hole 6</td><td style="padding:7px 10px;color:var(--text-muted);">—</td><td style="padding:7px 10px;text-align:center;">3</td><td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--red);">1 out</td><td style="padding:7px 10px;text-align:center;font-weight:700;">2</td></tr>
+        <tr style="background:#fff8e8;"><td style="padding:7px 10px;font-weight:700;">Hole 7</td><td style="padding:7px 10px;color:var(--text-muted);">—</td><td style="padding:7px 10px;text-align:center;">2</td><td style="padding:7px 10px;text-align:center;font-weight:700;color:var(--red);">1 out</td><td style="padding:7px 10px;text-align:center;font-weight:700;color:#c9a227;">🏆 Champion</td></tr>
+      </tbody>
+    </table>
+
+    <div style="font-weight:700;font-size:12px;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Ties & Putt-Offs</div>
+    <p style="font-size:13px;margin-bottom:14px;">Any tie at the elimination cut line on a given hole results in a <strong>putt-off</strong> — tied players putt from the same distance until one makes it and one doesn't. The player who misses is eliminated. If multiple players are tied for the last elimination spot, all tied players participate in the putt-off.</p>
+
+    <div style="font-weight:700;font-size:12px;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Mulligans</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:4px;">
+      <div style="background:#f8f4ec;border-radius:2px;padding:10px;text-align:center;border:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">HDCP 0–19</div>
+        <div style="font-size:28px;font-weight:700;color:var(--navy);">0</div>
+        <div style="font-size:11px;color:var(--text-muted);">No mulligans</div>
+      </div>
+      <div style="background:#f8f4ec;border-radius:2px;padding:10px;text-align:center;border:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">HDCP 20–23</div>
+        <div style="font-size:28px;font-weight:700;color:var(--navy);">1</div>
+        <div style="font-size:11px;color:var(--text-muted);">One mulligan</div>
+      </div>
+      <div style="background:#f8f4ec;border-radius:2px;padding:10px;text-align:center;border:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">HDCP 24+</div>
+        <div style="font-size:28px;font-weight:700;color:var(--navy);">2</div>
+        <div style="font-size:11px;color:var(--text-muted);">Two mulligans</div>
+      </div>
+    </div>
+    <div class="format-box" style="border-left-color:var(--red);margin-top:10px;">
+      <strong>⚠️ Mulligan Rules:</strong> Mulligans <strong>cannot</strong> be used on the putting surface. If a mulligan shot is hit, it <strong>must</strong> be taken — you cannot decline to use it after the fact.
+    </div>
   </div></div>
   <div class="card"><div class="card-header">Packing List</div><div class="card-body">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:13px;">
