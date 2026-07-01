@@ -2647,7 +2647,7 @@ async function restoreToActive(gid){
 const SO_ELIM_PER_HOLE={1:2,2:2,3:1,4:1,5:1,6:1,7:1};
 
 // Entry hole per seed index (0-based)
-function soEntryHole(seedIdx){ return seedIdx<1?5:seedIdx<2?4:seedIdx<4?3:seedIdx<6?2:1; }
+function soEntryHole(seedIdx){ return seedIdx<2?5:seedIdx<3?4:seedIdx<4?3:seedIdx<6?2:1; }
 
 // Get the current seed index of a golfer in the top-10 (by DBI pts)
 function soSeedIdx(golferId,top10){ return top10.findIndex(g=>g.id===golferId); }
