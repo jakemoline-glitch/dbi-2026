@@ -2443,7 +2443,7 @@ function renderShootoutLive(top10){
   const par=WILD_HORSE.par;
   const hdcpIdx=WILD_HORSE.hdcp;
 
-  // Auto-detect current hole: last hole with eliminations or scores
+  // Auto-detect current hole
   let curHole=1;
   for(let h=1;h<=7;h++){
     const hasElim=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===h);
@@ -2451,16 +2451,16 @@ function renderShootoutLive(top10){
       const st=shootoutSt[g.id]?.status||'active';
       if(st==='eliminated'||st==='champion') return false;
       const idx=soSeedIdx(g.id,top10);
-      return idx>=0 && h>=soEntryHole(idx);
+      return idx>=0&&h>=soEntryHole(idx);
     });
     const hasScore=activeHere.some(g=>shootoutHoleScores[g.id]?.[h]);
     if(hasScore||hasElim) curHole=h;
   }
-  const holeLocked=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===curHole);
-  const autoHole=holeLocked?Math.min(7,curHole+1):curHole;
+  const isHoleLocked=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===curHole);
+  const autoHole=isHoleLocked?Math.min(7,curHole+1):curHole;
   const displayHole=shootoutCurrentHole||autoHole;
 
-  // Champion state
+  // Champion state — render and exit early via separate path
   const champion=top10.find(g=>shootoutSt[g.id]?.status==='champion');
   if(champion){
     wrap.innerHTML=`<div class="card" style="background:linear-gradient(135deg,#0a1628,#1a2e50);margin-bottom:16px;">
@@ -2476,162 +2476,132 @@ function renderShootoutLive(top10){
   const holePar=par[displayHole-1];
   const holeHdcp=hdcpIdx[displayHole-1];
   const numElim=SO_ELIM_PER_HOLE[displayHole]||1;
-  const thisHoleLocked=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===displayHole);
+  const thisHoleDone=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===displayHole);
 
-  // Players active on this hole (entered AND not eliminated)
   const activePlayers=top10.filter(g=>{
     const st=shootoutSt[g.id]?.status||'active';
     if(st==='eliminated'||st==='champion') return false;
     const idx=soSeedIdx(g.id,top10);
-    return idx>=0 && displayHole>=soEntryHole(idx);
+    return idx>=0&&displayHole>=soEntryHole(idx);
   });
-
-  // Players waiting to enter on later holes
   const futureEntrants=top10.filter(g=>{
     const st=shootoutSt[g.id]?.status||'active';
     if(st==='eliminated'||st==='champion') return false;
     const idx=soSeedIdx(g.id,top10);
-    return idx>=0 && displayHole<soEntryHole(idx);
+    return idx>=0&&displayHole<soEntryHole(idx);
   });
-
-  // Already eliminated
   const eliminated=top10.filter(g=>shootoutSt[g.id]?.status==='eliminated');
 
-  let html=`<div class="card" style="border:2px solid var(--navy);margin-bottom:16px;">
+  // Build hole nav
+  const holeNav=[1,2,3,4,5,6,7].map(h=>{
+    const done=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===h);
+    const hasAny=top10.some(g=>shootoutHoleScores[g.id]?.[h]);
+    const bg=h===displayHole?'var(--navy)':done?'#d4edda':hasAny?'#f0e8d0':'var(--parchment)';
+    const col=h===displayHole?'var(--gold-light)':done?'#0a5c36':hasAny?'#8b6914':'var(--text-muted)';
+    return `<button onclick="setShootoutHole(${h})" style="flex:1;padding:8px 2px;border:none;border-radius:2px;font-size:12px;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer;background:${bg};color:${col};">${h}${done?'\u2713':''}</button>`;
+  }).join('');
 
-    <!-- Hole header -->
-    <div style="background:var(--navy);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
-      <div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:2px;">Current Hole</div>
-        <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:var(--gold);line-height:1;">Hole ${displayHole}</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.6);">Par ${holePar} · HCP Index ${holeHdcp}</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;">Eliminate</div>
-        <div style="font-size:32px;font-weight:700;color:#f08080;">${numElim}</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.4);">${activePlayers.length} playing this hole</div>
-      </div>
-    </div>
-
-    <!-- Hole navigation strip -->
-    <div style="display:flex;gap:4px;padding:10px 16px;background:#f8f4ec;border-bottom:1px solid var(--border);">
-      ${[1,2,3,4,5,6,7].map(h=>{
-        const done=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===h);
-        const hasAnyScore=top10.some(g=>shootoutHoleScores[g.id]?.[h]);
-        return `<button onclick="setShootoutHole(${h})" style="flex:1;padding:8px 2px;border:none;border-radius:2px;font-size:12px;font-weight:700;font-family:'Inter',sans-serif;cursor:pointer;
-          background:${h===displayHole?'var(--navy)':done?'#d4edda':hasAnyScore?'#f0e8d0':'var(--parchment)'};
-          color:${h===displayHole?'var(--gold-light)':done?'#0a5c36':hasAnyScore?'#8b6914':'var(--text-muted)'};">
-          ${h}${done?'✓':''}
-        </button>`;
-      }).join('')}
-    </div>
-
-    <!-- Score entry rows for active players -->
-    <div>`;
-
+  // Build player rows
+  let playerRows='';
   activePlayers.forEach(g=>{
     const sc=shootoutHoleScores[g.id]?.[displayHole]||'';
     const strokes=getStrokes(g.hdcp,holeHdcp,1.0);
-    const netScore=sc!==''?(parseInt(sc)-strokes):null;
-    const scoreColor=sc!==''?holeColor(parseInt(sc),holePar):'';
-    const dotHtml=strokes>0?`<span style="display:inline-flex;gap:2px;margin-left:3px;">${Array(strokes).fill('<span style="width:5px;height:5px;border-radius:50%;background:var(--gold);display:inline-block;"></span>').join('')}</span>`:'';
+    const net=sc!==''?(parseInt(sc)-strokes):null;
+    const cl=sc?holeColor(parseInt(sc),holePar):'';
+    const dots=strokes>0?('<span style="display:inline-flex;gap:2px;margin-left:3px;">'+Array(strokes).fill('<span style="width:5px;height:5px;border-radius:50%;background:var(--gold);display:inline-block;"></span>').join('')+'</span>'):'';
     const isMe=g.id===ME?.id;
     const canEdit=IS_ADMIN||isMe;
-
-    html+=`<div class="so-live-player${isMe?' my-group':''}">
+    const netCol=net!==null?(net<holePar?'#0a5c36':net>holePar?'var(--red)':'var(--navy)'):'';
+    playerRows+=`<div class="so-live-player${isMe?' my-group':''}">
       <div style="flex:1;min-width:0;">
-        <div style="font-size:15px;font-weight:700;">${g.name.split(' ')[0]}${dotHtml}${isMe?' ★':''}</div>
-        <div style="font-size:11px;color:var(--text-muted);">HDCP ${g.hdcp}${strokes>0?` · gets ${strokes} stroke${strokes>1?'s':''}`:' · no strokes'}</div>
-        ${netScore!==null?`<div style="font-size:12px;font-weight:700;color:${netScore<holePar?'#0a5c36':netScore>holePar?'var(--red)':'var(--navy)'};">
-          Gross ${sc} → Net ${netScore}
-        </div>`:''}
+        <div style="font-size:15px;font-weight:700;">${g.name.split(' ')[0]}${dots}${isMe?' \u2605':''}</div>
+        <div style="font-size:11px;color:var(--text-muted);">HDCP ${g.hdcp}${strokes>0?' \u00b7 '+strokes+' stroke'+(strokes>1?'s':''):'\u00b7 no strokes'}</div>
+        ${net!==null?`<div style="font-size:12px;font-weight:700;color:${netCol};">Gross ${sc} \u2192 Net ${net}</div>`:''}
       </div>
-      ${canEdit&&!thisHoleLocked?`
-        <button class="so-score-btn" onclick="soAdjScore(${g.id},${displayHole},-1)">−</button>
-        <input class="so-score-box ${scoreColor}" id="so-inp-${g.id}-${displayHole}" type="number"
-          value="${sc}" min="1" max="15"
-          oninput="onSoLiveInput(this,${g.id},${displayHole})"
-          style="border-color:${sc?'var(--navy)':'var(--border)'};">
+      ${canEdit&&!thisHoleDone?`
+        <button class="so-score-btn" onclick="soAdjScore(${g.id},${displayHole},-1)">\u2212</button>
+        <input class="so-score-box ${cl}" id="so-inp-${g.id}-${displayHole}" type="number" value="${sc}" min="1" max="15" oninput="onSoLiveInput(this,${g.id},${displayHole})" style="border-color:${sc?'var(--navy)':'var(--border)'};">
         <button class="so-score-btn" onclick="soAdjScore(${g.id},${displayHole},1)">+</button>
-      `:`<div style="width:56px;height:56px;border:2px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;" class="${scoreColor}">${sc||'—'}</div>`}
+      `:`<div style="width:56px;height:56px;border:2px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;" class="${cl}">${sc||'\u2014'}</div>`}
     </div>`;
   });
 
+  // Build footer banners
+  let futureBar='';
   if(futureEntrants.length){
-    html+=`<div style="padding:8px 16px;background:#f8f4ec;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
-      ⏳ Waiting to enter: ${futureEntrants.map(g=>{
-        const idx=soSeedIdx(g.id,top10);
-        return `${g.name.split(' ')[0]} → Hole ${soEntryHole(idx)}`;
-      }).join(' · ')}
+    futureBar=`<div style="padding:8px 16px;background:#f8f4ec;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
+      \u23f3 Waiting to enter: ${futureEntrants.map(g=>{const idx=soSeedIdx(g.id,top10);return g.name.split(' ')[0]+' \u2192 H'+soEntryHole(idx);}).join(' \u00b7 ')}
     </div>`;
   }
-
+  let elimBar='';
   if(eliminated.length){
-    html+=`<div style="padding:8px 16px;background:#fff5f5;border-top:1px solid #fde8e8;font-size:11px;color:#8b1a1a;">
-      ❌ Eliminated: ${eliminated.map(g=>`${g.name.split(' ')[0]} (H${shootoutSt[g.id]?.eliminated_hole||'?'})`).join(' · ')}
+    elimBar=`<div style="padding:8px 16px;background:#fff5f5;border-top:1px solid #fde8e8;font-size:11px;color:#8b1a1a;">
+      \u274c Eliminated: ${eliminated.map(g=>g.name.split(' ')[0]+' (H'+( shootoutSt[g.id]?.eliminated_hole||'?')+')').join(' \u00b7 ')}
     </div>`;
   }
-  html+=`</div>`;
 
-  // ---- ELIMINATION ACTION AREA ----
-  if(thisHoleLocked){
-    // Hole done — show who was eliminated and a Next button
+  // Build action bar
+  let actionBar='';
+  if(thisHoleDone){
     const elimHere=top10.filter(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===displayHole);
-    html+=`<div style="padding:14px 16px;background:#e8f5ee;border:2px solid #0a5c36;border-radius:2px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-      <span style="font-size:22px;">✅</span>
+    actionBar=`<div style="padding:14px 16px;background:#e8f5ee;border:2px solid #0a5c36;border-radius:2px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span style="font-size:22px;">\u2705</span>
       <div style="flex:1;">
         <div style="font-weight:700;color:#0a5c36;font-size:14px;">Hole ${displayHole} complete</div>
         <div style="font-size:12px;color:#0a5c36;">Eliminated: ${elimHere.map(g=>g.name).join(', ')}</div>
       </div>
-      ${displayHole<7?`<button onclick="setShootoutHole(${displayHole+1})" class="btn btn-gold" style="font-size:14px;padding:12px 24px;white-space:nowrap;">
-        Next: Hole ${displayHole+1} →
-      </button>`:''}
+      ${displayHole<7?'<button onclick="setShootoutHole('+(displayHole+1)+')" class="btn btn-gold" style="font-size:14px;padding:12px 24px;white-space:nowrap;">Next: Hole '+(displayHole+1)+' \u2192</button>':''}
     </div>`;
   } else if(IS_ADMIN){
-    // Manual elimination checklist
-    html+=`<div class="card" style="border:2px solid var(--gold);margin-top:0;">
-      <div class="card-header" style="background:#1a2e50;">
-        <span style="color:var(--gold-light);">❌ Select player${numElim>1?'s':''} to eliminate (${numElim} out)</span>
-      </div>
+    const checkboxes=activePlayers.map(g=>{
+      const sc=shootoutHoleScores[g.id]?.[displayHole]||'';
+      const strokes=getStrokes(g.hdcp,holeHdcp,1.0);
+      const net=sc!==''?(parseInt(sc)-strokes):null;
+      return `<label style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:2px solid var(--border);border-radius:4px;cursor:pointer;background:var(--white);">
+        <input type="checkbox" id="elim-${g.id}" value="${g.id}" style="width:20px;height:20px;cursor:pointer;accent-color:#8b1a1a;">
+        <div style="flex:1;"><div style="font-size:15px;font-weight:700;">${g.name}</div>
+        <div style="font-size:12px;color:var(--text-muted);">HDCP ${g.hdcp} \u00b7 Gross: ${sc||'\u2014'} \u00b7 Net: ${net!==null?net:'\u2014'}</div></div>
+      </label>`;
+    }).join('');
+    actionBar=`<div class="card" style="border:2px solid var(--gold);margin-top:0;">
+      <div class="card-header" style="background:#1a2e50;"><span style="color:var(--gold-light);">\u274c Select player${numElim>1?'s':''} to eliminate (${numElim} out)</span></div>
       <div style="padding:10px 16px;">
-        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
-          ${activePlayers.map(g=>{
-            const sc=shootoutHoleScores[g.id]?.[displayHole]||'';
-            const strokes=getStrokes(g.hdcp,holeHdcp,1.0);
-            const net=sc!==''?parseInt(sc)-strokes:null;
-            return `<label style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:2px solid var(--border);border-radius:4px;cursor:pointer;background:var(--white);-webkit-tap-highlight-color:transparent;"
-              onclick="this.style.background=document.getElementById('elim-${g.id}').checked?'var(--white)':'#fff5f5';this.style.borderColor=document.getElementById('elim-${g.id}').checked?'var(--border)':'#8b1a1a';">
-              <input type="checkbox" id="elim-${g.id}" value="${g.id}"
-                style="width:20px;height:20px;cursor:pointer;accent-color:#8b1a1a;">
-              <div style="flex:1;">
-                <div style="font-size:15px;font-weight:700;">${g.name}</div>
-                <div style="font-size:12px;color:var(--text-muted);">HDCP ${g.hdcp} · Gross: ${sc||'—'} · Net: ${net!==null?net:'—'}</div>
-              </div>
-            </label>`;
-          }).join('')}
-        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">${checkboxes}</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button onclick="eliminateCheckedFromPanel(${displayHole})" class="so-elim-btn" style="font-size:14px;padding:14px 28px;">
-            ❌ Eliminate Selected
-          </button>
-          <button onclick="setShootoutHole(${displayHole+1<8?displayHole+1:displayHole})" style="padding:14px 20px;background:var(--parchment);border:1px solid var(--border);border-radius:2px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">
-            Skip to Hole ${Math.min(7,displayHole+1)} →
-          </button>
+          <button onclick="eliminateCheckedFromPanel(${displayHole})" class="so-elim-btn" style="font-size:14px;padding:14px 28px;">\u274c Eliminate Selected</button>
+          ${displayHole<7?('<button onclick="setShootoutHole('+(displayHole+1)+')" style="padding:14px 20px;background:var(--parchment);border:1px solid var(--border);border-radius:2px;font-family:Inter,sans-serif;font-size:13px;font-weight:600;cursor:pointer;">Skip to H'+(displayHole+1)+' →</button>'):''}  
         </div>
-        <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">Tick the golfer(s) who scored highest. In a tie, tick all tied players then handle the putt-off — eliminate the loser after.</div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text-muted);">Tick the golfer(s) who scored highest. In a tie, use the putt-off then eliminate the loser.</div>
       </div>
     </div>`;
   } else {
-    // Non-admin view
-    html+=`<div style="padding:12px 16px;background:#fff8e8;border:1px solid var(--gold);border-radius:2px;font-size:13px;color:#8b6914;font-weight:600;">
-      ⏳ Waiting for admin to confirm eliminations for Hole ${displayHole}.
+    actionBar=`<div style="padding:12px 16px;background:#fff8e8;border:1px solid var(--gold);border-radius:2px;font-size:13px;color:#8b6914;font-weight:600;">
+      \u23f3 Waiting for admin to confirm eliminations for Hole ${displayHole}.
     </div>`;
   }
 
-  html+=`</div>`; // close outer wrapper
-
-  wrap.innerHTML=html;
+  wrap.innerHTML=`<div style="margin-bottom:16px;">
+    <div class="card" style="border:2px solid var(--navy);">
+      <div style="background:var(--navy);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:2px;">Current Hole</div>
+          <div style="font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:var(--gold);line-height:1;">Hole ${displayHole}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.6);">Par ${holePar} \u00b7 HCP Index ${holeHdcp}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;">Eliminate</div>
+          <div style="font-size:32px;font-weight:700;color:#f08080;">${numElim}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.4);">${activePlayers.length} playing</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;padding:10px 16px;background:#f8f4ec;border-bottom:1px solid var(--border);">${holeNav}</div>
+      <div>${playerRows}</div>
+      ${futureBar}${elimBar}
+    </div>
+    ${actionBar}
+  </div>`;
 }
+
 
 let shootoutCurrentHole=null;
 
@@ -2800,37 +2770,6 @@ function soAdjScore(gid,hole,delta){
     </div>`;
   }
 
-  // Elimination action bar
-  const allScored=activePlayers.length>0&&activePlayers.every(g=>shootoutHoleScores[g.id]?.[displayHole]);
-  const holeLocked=top10.some(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===displayHole);
-
-  html+=`<div style="padding:12px 16px;background:${holeLocked?'#e8f5ee':allScored?'#fff8e8':'#f8f4ec'};border-top:2px solid ${holeLocked?'#0a5c36':allScored?'var(--gold)':'var(--border)'};">`;
-
-  if(holeLocked){
-    const elimHere=top10.filter(g=>parseInt(shootoutSt[g.id]?.eliminated_hole)===displayHole);
-    html+=`<div style="display:flex;align-items:center;gap:10px;">
-      <span style="font-size:18px;">✅</span>
-      <div>
-        <div style="font-weight:700;color:#0a5c36;font-size:13px;">Hole ${displayHole} complete</div>
-        <div style="font-size:11px;color:var(--text-muted);">Eliminated: ${elimHere.map(g=>g.name.split(' ')[0]).join(', ')}</div>
-      </div>
-      ${displayHole<7?`<button onclick="setShootoutHole(${displayHole+1})" class="btn btn-gold" style="margin-left:auto;padding:10px 20px;">Next: Hole ${displayHole+1} →</button>`:''}
-    </div>`;
-  } else if(allScored&&IS_ADMIN){
-    html+=`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-      <button class="so-elim-btn" onclick="eliminateAfterHole(${displayHole},soTop10())">
-        ⚡ Eliminate ${numElim} player${numElim>1?'s':''} — Hole ${displayHole}
-      </button>
-      <button class="so-putt-btn" onclick="showPuttoffPanel(${displayHole})">
-        🏌 Putt-off Tie
-      </button>
-    </div>`;
-  } else if(allScored&&!IS_ADMIN){
-    html+=`<div style="font-size:12px;color:#8b6914;font-weight:600;">⏳ All scores entered — waiting for admin to confirm eliminations.</div>`;
-  } else {
-    const scored=activePlayers.filter(g=>shootoutHoleScores[g.id]?.[displayHole]).length;
-    html+=`<div style="font-size:12px;color:var(--text-muted);">📝 ${scored}/${activePlayers.length} scores entered for Hole ${displayHole}</div>`;
-  }
 function renderShootoutScorecard(top10){
   const wrap=document.getElementById('shootout-scorecard-wrap');
   if(!wrap) return;
