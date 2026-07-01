@@ -2256,14 +2256,14 @@ function renderShootoutScorecard(top10){
   const par=WILD_HORSE.par.slice(0,7);
   const hdcpIdx=WILD_HORSE.hdcp.slice(0,7);
   const entHole=s=>s<1?5:s<2?4:s<4?3:s<6?2:1;
-  const mulls=hdcp=>hdcp>=24?2:hdcp>=20?1:0;
 
   let html=`
-  <div style="display:flex;align-items:center;gap:8px;margin:18px 0 10px;">
+  <div style="display:flex;align-items:center;gap:8px;margin:18px 0 10px;flex-wrap:wrap;">
     <span style="color:#b8965a;font-size:13px;">●</span>
     <span style="font-size:11px;color:rgba(255,255,255,0.5);">1 stroke</span>
     <span style="color:#b8965a;font-size:13px;margin-left:8px;">●●</span>
     <span style="font-size:11px;color:rgba(255,255,255,0.5);">2 strokes (full handicap, Wild Horse holes 1–7)</span>
+    ${IS_ADMIN?`<span style="margin-left:12px;font-size:11px;color:rgba(255,255,255,0.4);">Click <strong style="color:var(--gold);">⚡ Eliminate</strong> after all scores are in for each hole.</span>`:''}
   </div>
   <div class="card">
     <div class="card-header"><span>Shootout Scorecard — First 7 Holes, Wild Horse</span><span class="badge">Top 10</span></div>
@@ -2292,15 +2292,23 @@ function renderShootoutScorecard(top10){
     const so=shootoutSt[g.id];
     const status=so?.status||'active';
     const isEliminated=status==='eliminated';
+    const isChampion=status==='champion';
+    const elimHole=so?.eliminated_hole;
     const rowStyle=isMe?'me-row':canEdit?'can-edit-row':'';
     const enters=entHole(seed);
 
     const tot=par.reduce((sum,_,i)=>sum+(sc[i+1]||0),0);
-    const playedCount=Object.keys(sc).filter(h=>sc[h]).length;
-    const toPar=playedCount?tot-par.slice(0,playedCount).reduce((a,b)=>a+b,0):null;
+    const playedHoles=par.filter((_,i)=>sc[i+1]).length;
+    const toPar=playedHoles?tot-par.slice(0,playedHoles).reduce((a,b)=>a+b,0):null;
 
-    html+=`<tr class="${rowStyle}" style="${isEliminated?'opacity:0.45;':''}">
-      <td class="nc">${g.name}${isMe?' ★':''}${status==='champion'?' 🏆':isEliminated?' ❌':''}</td>
+    const statusBadge=isChampion
+      ?`<span style="font-size:10px;font-weight:700;background:#c9a227;color:#0a1628;border-radius:2px;padding:1px 5px;margin-left:4px;">🏆 CHAMPION</span>`
+      :isEliminated
+      ?`<span style="font-size:10px;font-weight:700;background:#8b1a1a;color:#ffcccc;border-radius:2px;padding:1px 5px;margin-left:4px;">❌ OUT H${elimHole||'?'}</span>`
+      :`<span style="font-size:10px;font-weight:700;background:#0a2e18;color:#70d490;border-radius:2px;padding:1px 5px;margin-left:4px;">🟢</span>`;
+
+    html+=`<tr class="${rowStyle}" style="${isEliminated?'opacity:0.4;':''}${isChampion?'background:#fffbea;':''}">
+      <td class="nc">${g.name}${isMe?' ★':''} ${statusBadge}</td>
       <td style="font-size:11px;">${g.hdcp}</td>`;
 
     par.forEach((p,i)=>{
@@ -2309,7 +2317,8 @@ function renderShootoutScorecard(top10){
       const cl=v?holeColor(v,p):'';
       const strokes=getStrokes(g.hdcp,hdcpIdx[i],1.0);
       const isBeforeEntry=h<enters;
-      if(isBeforeEntry){
+      const elimOnOrBefore=isEliminated&&elimHole&&h>elimHole;
+      if(isBeforeEntry||elimOnOrBefore){
         html+=`<td style="padding:2px;background:#f4f0e6;"><span style="font-size:9px;color:var(--text-light);">—</span></td>`;
       } else if(canEdit && !isEliminated){
         html+=`<td style="padding:2px 2px;"><div class="sc-hi-wrap">${cornerDots(strokes)}<input class="sc-hi ${cl}" type="number" value="${v}" min="1" max="15" oninput="onShootoutHoleInput(this,${g.id},${h},${i})"></div></td>`;
@@ -2318,18 +2327,51 @@ function renderShootoutScorecard(top10){
       }
     });
 
-    html+=`<td class="tot-cell">${tot||'—'}</td>
-      <td class="tot-cell" style="color:${toPar===0?'var(--navy)':toPar>0?'var(--red)':'#0a5c36'};">${toPar!==null?(toPar>0?'+':'')+toPar:'—'}</td>
+    html+=`<td class="tot-cell" style="${isChampion?'background:#fffbea;':''}">${tot||'—'}</td>
+      <td class="tot-cell" style="color:${toPar===0?'var(--navy)':toPar>0?'var(--red)':'#0a5c36'};${isChampion?'background:#fffbea;':''}">${toPar!==null?(toPar>0?'+':'')+toPar:'—'}</td>
     </tr>`;
   });
 
-  html+=`</tbody></table></div>
-    <div style="padding:10px 14px;background:var(--parchment);border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
-      Grayed cells (—) are holes before that golfer's entry point. Eliminated golfers are dimmed but scores remain visible.
-    </div>
-  </div>`;
+  html+=`</tbody></table></div>`;
+
+  // Elimination buttons — one per hole, shown when all active players have scored
+  if(IS_ADMIN){
+    html+=`<div style="padding:12px 16px;background:var(--parchment);border-top:1px solid var(--border);">
+      <div style="font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">⚡ Eliminations</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">`;
+    for(let h=1;h<=7;h++){
+      const active=soActivePlayers(h,top10);
+      const allScored=active.length>0&&active.every(g=>soScore(g.id,h)!==null);
+      const numElim=SO_ELIM_PER_HOLE[h]||1;
+      const alreadyElimHere=top10.filter(g=>{
+        const so=shootoutSt[g.id];
+        return so?.status==='eliminated'&&so?.eliminated_hole===h;
+      });
+      if(alreadyElimHere.length>=numElim){
+        html+=`<span style="font-size:11px;padding:5px 10px;background:#e8f0ff;border-radius:2px;color:#0a5c36;font-weight:600;">H${h} ✓ Done</span>`;
+      } else if(allScored){
+        html+=`<button onclick="eliminateAfterHole(${h},soTop10())" class="btn btn-sm" style="background:#8b1a1a;color:white;border:none;padding:6px 12px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;cursor:pointer;">
+          ⚡ Eliminate after H${h} (${numElim} out)
+        </button>`;
+      } else if(active.length>0){
+        const scored=active.filter(g=>soScore(g.id,h)!==null).length;
+        html+=`<span style="font-size:11px;padding:5px 10px;background:#f4f0e6;border-radius:2px;color:var(--text-muted);">H${h}: ${scored}/${active.length} scored</span>`;
+      }
+    }
+    html+=`</div></div>`;
+  }
+
+  html+=`<div style="padding:8px 14px;background:var(--parchment);border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">
+    Grayed cells (—) are holes before that golfer's entry point or after elimination.
+    ${IS_ADMIN?'Admins: click status badges on the field list above to manually override.':''}
+  </div></div>`;
 
   wrap.innerHTML=html;
+}
+
+// Helper to get current top10 for elimination (used from inline onclick)
+function soTop10(){
+  return golfers.map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total).slice(0,10);
 }
 
 function onShootoutHoleInput(inp,golferId,hole,parIdx){
@@ -2357,20 +2399,126 @@ function onShootoutHoleInput(inp,golferId,hole,parIdx){
     markSaved(inp);
   },700);
 
-  // Refresh totals without full re-render flicker
+  // Refresh full scorecard so elimination buttons update live as scores come in
   clearTimeout(saveTimers['so_totals_render']);
   saveTimers['so_totals_render']=setTimeout(()=>{
     if(document.getElementById('tab-shootout')?.classList.contains('active')){
-      const ranked=golfers.map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total);
-      renderShootoutScorecard(ranked.slice(0,10));
+      renderShootoutScorecard(soTop10());
     }
-  },150);
+  },200);
 }
 
+// ===================== SHOOTOUT ELIMINATION ENGINE =====================
+
+// How many players to eliminate after each hole
+const SO_ELIM_PER_HOLE={1:2,2:2,3:2,4:1,5:1,6:1,7:1};
+
+// Entry hole per seed index (0-based)
+function soEntryHole(seedIdx){ return seedIdx<1?5:seedIdx<2?4:seedIdx<4?3:seedIdx<6?2:1; }
+
+// Get the current seed index of a golfer in the top-10 (by DBI pts)
+function soSeedIdx(golferId,top10){ return top10.findIndex(g=>g.id===golferId); }
+
+// Is a golfer active on a given hole? (entered AND not yet eliminated)
+function soIsActive(golferId,hole,top10){
+  const status=shootoutSt[golferId]?.status||'active';
+  if(status==='eliminated') return false;
+  const idx=soSeedIdx(golferId,top10);
+  return idx>=0 && hole>=soEntryHole(idx);
+}
+
+// Get active players on a given hole
+function soActivePlayers(hole,top10){
+  return top10.filter(g=>soIsActive(g.id,hole,top10));
+}
+
+// Get score for a golfer on a shootout hole
+function soScore(golferId,hole){ return shootoutHoleScores[golferId]?.[hole]??null; }
+
+// Check if all active players have scored a given hole
+function soHoleComplete(hole,top10){
+  const active=soActivePlayers(hole,top10);
+  if(!active.length) return false;
+  return active.every(g=>soScore(g.id,hole)!==null);
+}
+
+// Find the highest hole with any active player scores (current active hole)
+function soCurrentHole(top10){
+  for(let h=7;h>=1;h--){
+    const active=soActivePlayers(h,top10);
+    if(active.length && active.some(g=>soScore(g.id,h)!==null)) return h;
+  }
+  return 1;
+}
+
+// Auto-eliminate players after a hole is complete (admin-triggered)
+async function eliminateAfterHole(hole,top10){
+  const numElim=SO_ELIM_PER_HOLE[hole]||1;
+  const active=soActivePlayers(hole,top10);
+  const scored=active.filter(g=>soScore(g.id,hole)!==null);
+  if(scored.length<active.length){
+    showToast('Not all active players have scored this hole yet.');
+    return;
+  }
+
+  // Sort by score descending (worst first)
+  const sorted=[...scored].sort((a,b)=>{
+    const sa=soScore(a.id,hole);
+    const sb2=soScore(b.id,hole);
+    return sb2-sa; // highest (worst) score first
+  });
+
+  // Check for ties at the elimination cut line
+  const cutScore=soScore(sorted[numElim-1].id,hole);
+  const nextScore=sorted[numElim]?soScore(sorted[numElim].id,hole):null;
+
+  if(nextScore!==null && cutScore===nextScore){
+    // Tie at the cut — flag for putt-off, don't auto-eliminate
+    showToast(`⚠️ Tie at ${cutScore} on Hole ${hole}! Putt-off required. Eliminate manually after putt-off resolves.`);
+    return;
+  }
+
+  // Confirm before eliminating
+  const names=sorted.slice(0,numElim).map(g=>g.name.split(' ')[0]).join(' & ');
+  if(!confirm(`Eliminate ${names} after Hole ${hole}? Their score${numElim>1?'s were':' was'} the highest.`)) return;
+
+  // Save eliminations
+  for(let i=0;i<numElim;i++){
+    const g=sorted[i];
+    await sb.from('shootout').upsert(
+      {golfer_id:g.id, status:'eliminated', eliminated_hole:hole},
+      {onConflict:'golfer_id'}
+    );
+    shootoutSt[g.id]={...(shootoutSt[g.id]||{}), status:'eliminated', eliminated_hole:hole};
+  }
+
+  // Check if only 1 active player remains = champion
+  const remaining=soActivePlayers(hole,top10).filter(g=>soIsActive(g.id,hole+1,top10)||hole===7);
+  const stillActive=top10.filter(g=>{
+    const st=shootoutSt[g.id]?.status||'active';
+    return st!=='eliminated';
+  });
+  if(stillActive.length===1){
+    const champ=stillActive[0];
+    await sb.from('shootout').upsert(
+      {golfer_id:champ.id, status:'champion', eliminated_hole:null},
+      {onConflict:'golfer_id'}
+    );
+    shootoutSt[champ.id]={...(shootoutSt[champ.id]||{}), status:'champion'};
+    showToast(`🏆 ${champ.name} is the Shootout Champion!`);
+  } else {
+    showToast(`✓ ${names} eliminated after Hole ${hole}.`);
+  }
+
+  renderShootout();
+}
+
+// Manual status cycle (admin can override)
 async function cycleSOStatus(gid,cur){
   const next=cur==='active'?'eliminated':cur==='eliminated'?'champion':'active';
-  await sb.from('shootout').upsert({golfer_id:gid,status:next},{onConflict:'golfer_id'});
-  shootoutSt[gid]={...(shootoutSt[gid]||{}),status:next};
+  const elimHole=next==='eliminated'?soCurrentHole(golfers.map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total).slice(0,10)):null;
+  await sb.from('shootout').upsert({golfer_id:gid,status:next,eliminated_hole:elimHole||null},{onConflict:'golfer_id'});
+  shootoutSt[gid]={...(shootoutSt[gid]||{}),status:next,eliminated_hole:elimHole};
   renderShootout();
 }
 
@@ -2817,6 +2965,55 @@ async function calcRound6(){
   if(results.length===0){showToast('No Round 6 scores found. Enter team scramble scores on the scorecards tab, or select winners manually below.');return;}
   await saveRoundResults(6,results);
   renderLB();renderMyScores(curMyR);
+
+  // Auto-award the 5-pt Team Cup bonus if there's a clear winner
+  const r3pts=calcTeamRoundPoints(3);
+  const r6pts=calcTeamRoundPoints(6);
+  const totalA=r3pts.teamAPts+r6pts.teamAPts;
+  const totalB=r3pts.teamBPts+r6pts.teamBPts;
+  // Pre-compute team bonus HTML to avoid IIFE in template literal
+  let teamBonusHtml='';
+  if(IS_ADMIN&&totalA!==totalB){
+    const winTeam2=totalA>totalB?'A':'B';
+    const winnerIds2=golfers.filter(g=>teamPlayers[g.id]===winTeam2).map(g=>g.id);
+    const alreadyAwarded2=winnerIds2.some(gid=>roundResults[6]?.[gid]?.team_bonus_points>0);
+    const winnerName2=totalA>totalB?(teamComp.team_a_name||'Team A'):(teamComp.team_b_name||'Team B');
+    if(alreadyAwarded2){
+      teamBonusHtml='<div style="padding:10px 16px;background:#0a2e18;border-top:1px solid var(--gold);text-align:center;"><span style="font-size:12px;color:#70d490;">✓ 5 DBI bonus points already awarded to '+winnerName2+' — auto-applied when Round 6 was calculated.</span></div>';
+    } else {
+      teamBonusHtml='<div style="padding:12px 16px;background:#0a1628;border-top:1px solid var(--gold);text-align:center;"><button class="btn btn-gold" onclick="awardTeamCupBonus()" style="font-size:13px;padding:10px 24px;">🏆 Award 5 DBI Bonus Points to '+winnerName2+' Winners</button><p style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:6px;">Auto-awarded when Round 6 is calculated. Use only if needed manually.</p></div>';
+    }
+  }
+  if(totalA!==totalB){
+    const winningTeam=totalA>totalB?'A':'B';
+    const winnerName=totalA>totalB?(teamComp.team_a_name||'Team A'):(teamComp.team_b_name||'Team B');
+    const winnerIds=golfers.filter(g=>teamPlayers[g.id]===winningTeam).map(g=>g.id);
+    if(winnerIds.length===10){
+      for(const gid of winnerIds){
+        const existing=roundResults[6]?.[gid];
+        const basePts=existing?.dbi_points||0;
+        // Only award if not already awarded (avoid double-awarding on recalculation)
+        if(!(existing?.team_bonus_points>0)){
+          await sb.from('round_results').upsert({
+            round:6,golfer_id:gid,
+            dbi_points:basePts+5,
+            team_bonus_points:5,
+            notes:(existing?.notes||'')+' +5 Team Cup bonus'
+          },{onConflict:'round,golfer_id'});
+        }
+      }
+      await loadAll();
+      renderLB();
+      showToast(`✓ Round 6 points saved + 5 bonus pts auto-awarded to ${winnerName}!`);
+    } else {
+      showToast('Round 6 saved. Assign all 20 players to teams in the Team Cup tab to auto-award the bonus.');
+    }
+  } else if(totalA===totalB&&(totalA+totalB)>0){
+    showToast('Round 6 saved. Team Cup is tied — resolve the tie manually in the ⚔️ Team Cup tab.');
+  } else {
+    showToast('Round 6 points saved.');
+  }
+
   return results;
 }
 
@@ -3445,15 +3642,22 @@ function renderCalcutta(){
   const rankedGolfers=[...golfers].map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total);
   const rankedWithTies=assignRanks(rankedGolfers,g=>g.total,false);
   const roundsScored=[1,2,3,4,5,6].filter(r=>roundResults[r]&&Object.keys(roundResults[r]).length>0).length;
+  // Consider shootout complete if there's a champion
+  const shootoutChamp=Object.entries(shootoutSt).find(([,s])=>s.status==='champion');
   const isComplete=roundsScored===6;
+  const statusLabel=isComplete?'✓ Final':'⏳ Projected — '+roundsScored+'/6 rounds complete';
+
   const charity=totalPot*(CHARITY_PCT/100);
 
   html+=`<div class="card" style="margin-top:16px;">
     <div class="card-header" style="justify-content:space-between;">
       <span>💵 Calcutta Payouts</span>
       <span class="badge" style="background:${isComplete?'#0a5c36':'#8b6914'};color:white;">
-        ${isComplete?'✓ Final':'⏳ Projected — '+roundsScored+'/6 rounds complete'}
+        ${statusLabel}
       </span>
+    </div>
+    <div style="padding:6px 16px;background:#f8f4ec;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-muted);">
+      Placement based on total DBI points across all 6 rounds (including Team Cup bonus). Projected until all rounds are finalized.
     </div>
     <div style="padding:0;">`;
 
@@ -3638,12 +3842,7 @@ async function renderTeamCup(){
         <div style="font-size:18px;font-weight:700;color:#70d490;margin-top:2px;">${r6pts.teamAPts%1===0?r6pts.teamAPts:r6pts.teamAPts.toFixed(1)} <span style="color:rgba(255,255,255,0.2);">·</span> <span style="color:#f08080;">${r6pts.teamBPts%1===0?r6pts.teamBPts:r6pts.teamBPts.toFixed(1)}</span></div>
       </div>
     </div>
-    ${IS_ADMIN&&(totalA!==totalB)?`<div style="padding:12px 16px;background:#0a1628;border-top:1px solid var(--gold);text-align:center;">
-      <button class="btn btn-gold" onclick="awardTeamCupBonus()" style="font-size:13px;padding:10px 24px;">
-        🏆 Award 5 DBI Bonus Points to ${totalA>totalB?(teamComp.team_a_name||'Team A'):(teamComp.team_b_name||'Team B')} Winners
-      </button>
-      <p style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:6px;">Awards +5 DBI points to all 10 players on the winning team. Do this after Round 6 is complete.</p>
-    </div>`:''}
+    ${teamBonusHtml}
   </div>`;
 
   // ---- MATCH RESULTS (R3 & R6) ----
