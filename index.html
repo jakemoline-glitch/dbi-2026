@@ -3904,123 +3904,153 @@ function renderLiveScoring(){
     </div>`;
 
   } else {
-    // Stroke play — running totals, group vs group standings
     const allGroups=pairingsData[liveRound]||[];
-    const groupScores=allGroups.slice(0,5).map((g,gi)=>{
-      const piG=g.player_indices||[];
-      const players=piG.map(i=>golfers[i]).filter(Boolean);
-      let groupScore=null;
-      let holesIn=0;
-      if(liveRound===2){
-        // Team scramble — one score under hole+100
+    const isIndividual=liveRound===1||liveRound===4||liveRound===5;
+    const isTeamGroup=liveRound===2;
+
+    if(isIndividual){
+      // R1 (Stableford), R4 (Shamble individual scores), R5 (Net Score)
+      // Build individual player standings across all 20 golfers
+      const playerStandings=golfers.map(g=>{
+        const sc=holeScores[liveRound]?.[g.id]||{};
+        const holesPlayed=Object.keys(sc).filter(h=>parseInt(h)>=1&&parseInt(h)<=18&&sc[h]).length;
+        if(holesPlayed===0) return {g,holesPlayed,score:null,display:'—'};
+
+        if(liveRound===1){
+          // Stableford: show vs quota running
+          const sfPts=calcStablefordPts(sc,g.hdcp);
+          const quota=38-parseFloat(g.hdcp);
+          const vsQ=sfPts-quota;
+          return {g,holesPlayed,score:vsQ,display:(vsQ>=0?'+':'')+vsQ,isMe:g.id===ME?.id,label:'vs Quota',sortVal:-vsQ};
+        } else if(liveRound===5){
+          // Net score: gross - hdcp running
+          const gross=Object.entries(sc).filter(([h])=>parseInt(h)>=1&&parseInt(h)<=18).reduce((s,[,v])=>s+v,0);
+          const net=gross-parseFloat(g.hdcp);
+          const toPar=gross-par.slice(0,holesPlayed).reduce((a,b)=>a+b,0);
+          return {g,holesPlayed,score:net,display:net,isMe:g.id===ME?.id,label:'Net',sortVal:net,toPar};
+        } else {
+          // R4: individual gross to par (team net shown separately in left panel)
+          const gross=Object.entries(sc).filter(([h])=>parseInt(h)>=1&&parseInt(h)<=18).reduce((s,[,v])=>s+v,0);
+          const toPar=gross-par.slice(0,holesPlayed).reduce((a,b)=>a+b,0);
+          const net=gross-getStrokes(g.hdcp,0,0.8)*holesPlayed; // approx
+          return {g,holesPlayed,score:toPar,display:(toPar>=0?'+':'')+toPar,isMe:g.id===ME?.id,label:'to Par',sortVal:toPar};
+        }
+      });
+
+      const started=playerStandings.filter(p=>p.score!==null).sort((a,b)=>a.sortVal-b.sortVal);
+      const notStarted=playerStandings.filter(p=>p.score===null);
+
+      // My group mini-scorecard
+      const myGroupData=allGroups.find((_,i)=>i+1===groupNum);
+      if(myGroupData){
+        const myPi=myGroupData.player_indices||[];
+        const myPs=myPi.map(i=>golfers[i]).filter(Boolean);
+        html+=`<div class="card" style="margin-bottom:12px;">
+          <div class="card-header"><span>My Group · Scorecards</span></div>
+          <div style="overflow-x:auto;padding:8px 0;">
+            <table style="border-collapse:collapse;font-size:11px;width:100%;">
+              <tr>
+                <td style="padding:4px 10px;font-weight:700;color:var(--text-muted);">Hole</td>
+                ${par.map((_,i)=>`<td style="padding:3px 4px;text-align:center;color:var(--text-muted);font-size:10px;">${i+1}</td>`).join('')}
+                <td style="padding:4px 8px;text-align:center;font-weight:700;">TOT</td>
+                ${liveRound===5?'<td style="padding:4px 6px;text-align:center;font-weight:700;">NET</td>':''}
+              </tr>
+              <tr>
+                <td style="padding:4px 10px;color:var(--text-muted);">Par</td>
+                ${par.map(p=>`<td style="padding:3px 4px;text-align:center;">${p}</td>`).join('')}
+                <td style="padding:4px 8px;text-align:center;font-weight:700;">${par.reduce((a,b)=>a+b,0)}</td>
+                ${liveRound===5?'<td></td>':''}
+              </tr>
+              ${myPs.map(p=>{
+                const sc=holeScores[liveRound]?.[p.id]||{};
+                let tot=0;
+                return `<tr style="${p.id===ME?.id?'background:#f0f4ff;':''}">
+                  <td style="padding:4px 10px;font-weight:600;white-space:nowrap;">${p.name.split(' ')[0]}${p.id===ME?.id?' ★':''}</td>
+                  ${par.map((_,i)=>{
+                    const h=i+1;
+                    const sv=sc[h];
+                    if(sv) tot+=sv;
+                    const cl=sv?holeColorClass(sv,par[i]):'';
+                    return `<td class="${cl}" style="padding:3px 4px;text-align:center;border-radius:2px;font-size:11px;">${sv||''}</td>`;
+                  }).join('')}
+                  <td style="padding:4px 8px;text-align:center;font-weight:700;">${tot||'—'}</td>
+                  ${liveRound===5?`<td style="padding:4px 6px;text-align:center;font-weight:700;color:#0a5c36;">${tot?Math.round(tot-parseFloat(p.hdcp)):'—'}</td>`:''}
+                </tr>`;
+              }).join('')}
+            </table>
+          </div>
+        </div>`;
+      }
+
+      // Individual leaderboard — all 20 players
+      const standingLabel=liveRound===1?'Stableford vs Quota':liveRound===5?'Individual Net':'Individual to Par';
+      html+=`<div class="card"><div class="card-header"><span>Individual Standings · R${liveRound}</span><span class="badge">${standingLabel}</span></div><div style="padding:0;">`;
+      let displayRank=1;
+      started.forEach((ps,idx)=>{
+        const isMe=ps.g.id===ME?.id;
+        const scoreColor=liveRound===1?(ps.score>0?'#0a5c36':ps.score<0?'var(--red)':'var(--text)'):(ps.score<0?'#0a5c36':ps.score>0?'var(--red)':'var(--text)');
+        // Handle ties for display rank
+        if(idx>0&&started[idx-1].sortVal!==ps.sortVal) displayRank=idx+1;
+        html+=`<div class="live-standing-row${isMe?' my-group':''}">
+          <div style="font-size:13px;font-weight:700;color:var(--text-muted);min-width:24px;">${displayRank}</div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:${isMe?700:500};">${ps.g.name}${isMe?' ★':''}</div>
+            <div style="font-size:10px;color:var(--text-muted);">HDCP ${ps.g.hdcp} · ${ps.holesPlayed}/18 holes</div>
+          </div>
+          <div style="font-size:17px;font-weight:700;color:${scoreColor};">${ps.display}</div>
+        </div>`;
+      });
+      if(notStarted.length){
+        html+=`<div style="padding:8px 14px;font-size:11px;color:var(--text-muted);font-style:italic;border-top:1px solid var(--border);">${notStarted.map(p=>p.g.name.split(' ')[0]).join(', ')} — not yet started</div>`;
+      }
+      html+=`</div></div>`;
+
+    } else {
+      // R2: Team Scramble — group vs group standings
+      const groupScores=allGroups.slice(0,5).map((g,gi)=>{
+        const piG=g.player_indices||[];
+        const players=piG.map(i=>golfers[i]).filter(Boolean);
         const anyId=players[0]?.id;
         const sc=holeScores[2]?.[anyId]||{};
         const gross=Object.entries(sc).filter(([h])=>parseInt(h)>100&&parseInt(h)<=118).reduce((s,[,v])=>s+v,0);
         const hc=Object.keys(sc).filter(h=>parseInt(h)>100&&parseInt(h)<=118).length;
-        if(hc>0){groupScore=gross;holesIn=hc;}
-      } else if(liveRound===4){
-        // Shamble: best 2 net per hole
-        let teamNet=0,hn=0;
-        for(let h=1;h<=18;h++){
-          const nets=players.map(p=>{
-            const gross=holeScores[4]?.[p.id]?.[h];
-            if(!gross) return null;
-            return gross-getStrokes(p.hdcp,hdcpIdx[h-1],0.8);
-          }).filter(n=>n!==null).sort((a,b)=>a-b);
-          if(nets.length>=2){teamNet+=nets[0]+nets[1];hn++;}
-          else if(nets.length===1){teamNet+=nets[0];hn++;}
-        }
-        if(hn>0){groupScore=teamNet;holesIn=hn;}
-      } else {
-        // R1/R5: individual — show best scorer or sum
-        let toPar=0,hn=0;
-        players.forEach(p=>{
-          const sc=holeScores[liveRound]?.[p.id]||{};
-          Object.entries(sc).forEach(([h,v])=>{
-            const hi=parseInt(h)-1;
-            if(hi>=0&&hi<18){toPar+=(v-par[hi]);hn++;}
-          });
-        });
-        holesIn=Math.round(hn/Math.max(1,players.length));
-        if(holesIn>0) groupScore=toPar;
+        const groupPar=par.slice(0,hc).reduce((a,b)=>a+b,0);
+        const toPar=hc>0?gross-groupPar:null;
+        return {gi,players,gross:hc>0?gross:null,hc,toPar,isMe:gi+1===groupNum};
+      });
+
+      const myGroupData=groupScores.find(x=>x.isMe);
+      if(myGroupData&&myGroupData.gross!==null){
+        const msc=myGroupData;
+        html+=`<div class="card" style="margin-bottom:12px;">
+          <div class="card-header"><span>My Team · Running</span>
+            <span class="badge" style="background:${(msc.toPar||0)<0?'#0a5c36':(msc.toPar||0)>0?'var(--red)':'var(--navy)'};color:white;">${(msc.toPar||0)>0?'+':''}${msc.toPar||0} · ${msc.hc}/18 holes</span>
+          </div>
+          <div style="padding:10px 14px;font-size:13px;">
+            <div style="font-weight:600;margin-bottom:4px;">${msc.players.map(p=>p.name.split(' ')[0]).join(' · ')}</div>
+            <div style="color:var(--text-muted);font-size:11px;">Team Gross: ${msc.gross} · Par: ${par.slice(0,msc.hc).reduce((a,b)=>a+b,0)}</div>
+          </div>
+        </div>`;
       }
-      return {gi,g,players,groupScore,holesIn,isMe:gi+1===groupNum};
-    });
 
-    // Sort by score ascending (best first) for stroke rounds, or to-par
-    const sorted=[...groupScores].filter(x=>x.groupScore!==null).sort((a,b)=>a.groupScore-b.groupScore);
-    const unstarted=groupScores.filter(x=>x.groupScore===null);
-
-    // My group running scorecard
-    const myGroupData=groupScores.find(x=>x.isMe);
-    if(myGroupData){
-      const msc=myGroupData;
-      let runningTot=0,runningNet=0;
-      const holeRows=par.slice(0,liveHole).map((_,i)=>{
-        const h=i+1;
-        const scores=msc.players.map(p=>{
-          if(liveRound===2) return holeScores[2]?.[p.id]?.[h+100]??null;
-          return holeScores[liveRound]?.[p.id]?.[h]??null;
-        }).filter(s=>s!==null);
-        if(!scores.length) return null;
-        const best=Math.min(...scores);
-        const p=par[i];
-        runningTot+=best;
-        return {h,p,best,diff:best-p};
-      }).filter(Boolean);
-      const toPar=holeRows.reduce((s,r)=>s+r.diff,0);
-
-      html+=`<div class="card" style="margin-bottom:12px;">
-        <div class="card-header"><span>My Group · Running Total</span>
-          <span class="badge" style="background:${toPar<0?'#0a5c36':toPar>0?'var(--red)':'var(--navy)'};color:white;">${toPar>0?'+':''}${toPar} thru ${liveHole-1+(holeRows.length?1:0)}</span>
-        </div>
-        <div style="overflow-x:auto;padding:8px 0;">
-          <table style="border-collapse:collapse;font-size:11px;width:100%;">
-            <tr>
-              <td style="padding:4px 10px;font-weight:700;color:var(--text-muted);">Hole</td>
-              ${par.map((_,i)=>`<td style="padding:4px 5px;text-align:center;color:var(--text-muted);font-size:10px;">${i+1}</td>`).join('')}
-              <td style="padding:4px 8px;text-align:center;font-weight:700;">TOT</td>
-            </tr>
-            <tr>
-              <td style="padding:4px 10px;font-weight:700;color:var(--text-muted);">Par</td>
-              ${par.map(p=>`<td style="padding:4px 5px;text-align:center;">${p}</td>`).join('')}
-              <td style="padding:4px 8px;text-align:center;font-weight:700;">${par.reduce((a,b)=>a+b,0)}</td>
-            </tr>
-            ${msc.players.map(p=>{
-              let tot=0;
-              return `<tr>
-                <td style="padding:4px 10px;font-weight:600;white-space:nowrap;">${p.name.split(' ')[0]}</td>
-                ${par.map((_,i)=>{
-                  const h=i+1;
-                  const sc=liveRound===2?holeScores[2]?.[p.id]?.[h+100]:holeScores[liveRound]?.[p.id]?.[h];
-                  if(sc) tot+=sc;
-                  const cl=sc?holeColorClass(sc,par[i]):'';
-                  return `<td class="${cl}" style="padding:3px 5px;text-align:center;border-radius:2px;">${sc||''}</td>`;
-                }).join('')}
-                <td style="padding:4px 8px;text-align:center;font-weight:700;">${tot||'—'}</td>
-              </tr>`;
-            }).join('')}
-          </table>
-        </div>
-      </div>`;
+      const sorted=[...groupScores].filter(x=>x.gross!==null).sort((a,b)=>a.gross-b.gross);
+      const unstarted=groupScores.filter(x=>x.gross===null);
+      html+=`<div class="card"><div class="card-header"><span>Team Standings · R2 Scramble</span></div><div style="padding:0;">`;
+      [...sorted,...unstarted].forEach((gs,rank)=>{
+        const names=gs.players.map(p=>p.name.split(' ')[0]).join(' / ');
+        const disp=gs.gross!==null?((gs.toPar||0)>=0?'+'+(gs.toPar||0):(gs.toPar||0)):'—';
+        const col=gs.toPar!==null&&gs.toPar<0?'#0a5c36':gs.toPar>0?'var(--red)':'var(--text)';
+        html+=`<div class="live-standing-row${gs.isMe?' my-group':''}">
+          <div style="font-size:14px;font-weight:700;color:var(--text-muted);min-width:22px;">${gs.gross!==null?rank+1:'—'}</div>
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:${gs.isMe?700:500};">${names}</div>
+            <div style="font-size:10px;color:var(--text-muted);">${gs.hc}/18 holes · Gross: ${gs.gross||'—'}</div>
+          </div>
+          <div style="font-size:16px;font-weight:700;color:${col};">${disp}</div>
+        </div>`;
+      });
+      html+=`</div></div>`;
     }
-
-    // Group standings
-    html+=`<div class="card"><div class="card-header"><span>Group Standings · R${liveRound}</span></div><div style="padding:0;">`;
-    const label=liveRound===4?'Team Net':liveRound===2?'Team Gross':'to Par';
-    [...sorted,...unstarted].forEach((gs,rank)=>{
-      const names=gs.players.map(p=>p.name.split(' ')[0]).join(' / ');
-      const scoreDisp=gs.groupScore!==null?(liveRound===4||liveRound===2?gs.groupScore:(gs.groupScore>0?'+':'')+gs.groupScore):'—';
-      html+=`<div class="live-standing-row${gs.isMe?' my-group':''}">
-        <div style="font-size:14px;font-weight:700;color:var(--text-muted);min-width:22px;">${gs.groupScore!==null?rank+1:'—'}</div>
-        <div style="flex:1;">
-          <div style="font-size:12px;font-weight:${gs.isMe?700:500};">${names}</div>
-          <div style="font-size:10px;color:var(--text-muted);">${gs.holesIn}/18 holes</div>
-        </div>
-        <div style="font-size:16px;font-weight:700;color:${gs.groupScore!==null&&gs.groupScore<0?'#0a5c36':gs.groupScore>0?'var(--red)':'var(--text)'};">${scoreDisp}</div>
-      </div>`;
-    });
-    html+=`</div></div>`;
   }
 
   html+=`</div></div>`; // close right column and live-wrap
@@ -4158,54 +4188,49 @@ function renderCalcutta(){
     </div>`:''}
   </div>`;
 
-  // Add entry form
+  // Add entry form — multi-row ownership panel
   html+=`<div class="card" style="margin-bottom:20px;">
-    <div class="card-header"><span>➕ Add Auction Entry</span></div>
+    <div class="card-header"><span>➕ Enter Auction Results</span></div>
     <div class="card-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr 70px 90px 1fr auto;gap:10px;align-items:end;">
-        <div>
-          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Golfer</label>
-          <select id="ca-golfer" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:7px 8px;font-size:12px;font-family:'Inter',sans-serif;">
-            <option value="">Select golfer...</option>
+      <div style="display:flex;align-items:end;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Select Golfer</label>
+          <select id="ca-golfer" onchange="onCalcuttaGolferChange(this.value)" style="width:100%;border:1px solid var(--border);border-radius:2px;padding:8px 10px;font-size:13px;font-family:'Inter',sans-serif;">
+            <option value="">Choose a golfer to enter ownership...</option>
             ${golfers.map(g=>{
               const sold=byGolfer[g.id];
               const pctSold=sold?sold.totalPct:0;
               const pctLeft=Math.max(0,100-pctSold);
-              return `<option value="${g.id}">${g.name} (${g.hdcp})${pctSold>0?` — ${pctLeft.toFixed(0)}% left`:''}${pctLeft<=0?' ✓':''}</option>`;
+              return `<option value="${g.id}">${g.name} (HDCP ${g.hdcp})${pctSold>0?` — ${pctLeft.toFixed(0)}% left`:''}${pctLeft<=0?' ✓ SOLD':''}</option>`;
             }).join('')}
           </select>
         </div>
-        <div>
-          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Buyer Name</label>
-          <input type="text" id="ca-buyer" placeholder="e.g. Jake Moline" list="ca-buyer-list"
-            style="width:100%;border:1px solid var(--border);border-radius:2px;padding:7px 8px;font-size:12px;font-family:'Inter',sans-serif;">
-          <datalist id="ca-buyer-list">
-            ${golfers.map(g=>`<option value="${g.name}">`).join('')}
-            ${[...new Set(calcuttaData.map(c=>c.buyer_name))].filter(n=>!golfers.find(g=>g.name===n)).map(n=>`<option value="${n}">`).join('')}
-          </datalist>
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">%</label>
-          <input type="number" id="ca-pct" placeholder="100" min="1" max="100" step="1"
-            style="width:100%;border:1px solid var(--border);border-radius:2px;padding:7px 8px;font-size:12px;font-family:'Inter',sans-serif;">
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">$ Amount</label>
-          <input type="number" id="ca-amt" placeholder="0" min="0" step="1"
-            style="width:100%;border:1px solid var(--border);border-radius:2px;padding:7px 8px;font-size:12px;font-family:'Inter',sans-serif;">
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Notes (optional)</label>
-          <input type="text" id="ca-notes" placeholder="e.g. split with Ryan"
-            style="width:100%;border:1px solid var(--border);border-radius:2px;padding:7px 8px;font-size:12px;font-family:'Inter',sans-serif;">
-        </div>
-        <div style="padding-bottom:1px;">
-          <button class="btn btn-gold" onclick="addCalcuttaEntry()" style="padding:8px 14px;white-space:nowrap;">Add</button>
-        </div>
+        <div id="ca-pct-bar" style="font-size:12px;color:var(--text-muted);padding-bottom:8px;"></div>
       </div>
-      <div id="ca-error" style="color:var(--red);font-size:12px;margin-top:8px;display:none;"></div>
+
+      <!-- Existing ownership for selected golfer -->
+      <div id="ca-existing" style="margin-bottom:12px;"></div>
+
+      <!-- Buyer rows — dynamically added -->
+      <div id="ca-buyer-rows"></div>
+
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+        <button onclick="addCalcuttaBuyerRow()" class="btn" style="background:var(--parchment);color:var(--navy);border:1px solid var(--border);padding:7px 14px;font-size:11px;">+ Add Buyer Row</button>
+        <button onclick="saveAllCalcuttaRows()" class="btn btn-gold" style="padding:9px 22px;font-size:12px;">💾 Save All</button>
+        <div id="ca-error" style="color:var(--red);font-size:12px;display:none;"></div>
+        <div id="ca-remaining" style="font-size:12px;color:var(--text-muted);margin-left:auto;"></div>
+      </div>
     </div>
   </div>`;
+
+  // Restore golfer selection state after re-render
+  setTimeout(()=>{
+    const sel=document.getElementById('ca-golfer');
+    if(sel&&window._lastCalcuttaGolferId){
+      sel.value=window._lastCalcuttaGolferId;
+      onCalcuttaGolferChange(window._lastCalcuttaGolferId);
+    }
+  },0);
 
   // Golfer breakdown table — sorted by total sale price descending
   const sortedGolfers=[...golfers].sort((a,b)=>(byGolfer[b.id]?.totalAmt||0)-(byGolfer[a.id]?.totalAmt||0));
@@ -4381,36 +4406,173 @@ function renderCalcutta(){
   div.innerHTML=html;
 }
 
-async function addCalcuttaEntry(){
-  const golferId=parseInt(document.getElementById('ca-golfer')?.value);
-  const buyerName=(document.getElementById('ca-buyer')?.value||'').trim();
-  const pct=parseFloat(document.getElementById('ca-pct')?.value);
-  const amt=parseFloat(document.getElementById('ca-amt')?.value);
-  const notes=(document.getElementById('ca-notes')?.value||'').trim();
+// ---- CALCUTTA MULTI-ROW OWNERSHIP PANEL ----
+
+let caRowCount=0; // tracks row IDs
+
+function onCalcuttaGolferChange(gidStr){
+  window._lastCalcuttaGolferId=gidStr;
+  const gid=parseInt(gidStr);
+  const existingEl=document.getElementById('ca-existing');
+  const pctBarEl=document.getElementById('ca-pct-bar');
+  const rowsEl=document.getElementById('ca-buyer-rows');
+  if(!existingEl||!rowsEl) return;
+
+  if(!gid){
+    existingEl.innerHTML='';
+    if(pctBarEl) pctBarEl.textContent='';
+    rowsEl.innerHTML='';
+    updateCalcuttaRemaining();
+    return;
+  }
+
+  // Show existing ownership
+  const existing=calcuttaData.filter(c=>c.golfer_id===gid);
+  const pctSold=existing.reduce((s,c)=>s+parseFloat(c.percentage),0);
+  const pctLeft=Math.max(0,100-pctSold);
+
+  if(pctBarEl) pctBarEl.innerHTML=`<span style="font-weight:700;color:${pctLeft>0?'#8b6914':'#0a5c36'};">${pctLeft.toFixed(0)}% available</span>`;
+
+  if(existing.length){
+    existingEl.innerHTML=`<div style="background:#f8f4ec;border-radius:2px;padding:8px 12px;margin-bottom:8px;font-size:12px;">
+      <div style="font-weight:700;color:var(--navy);margin-bottom:4px;">Current ownership:</div>
+      ${existing.map(e=>`<div style="display:flex;justify-content:space-between;padding:2px 0;">
+        <span>${e.buyer_name}</span>
+        <span style="color:var(--text-muted);">${parseFloat(e.percentage).toFixed(0)}% · $${parseFloat(e.amount).toFixed(0)}
+          ${IS_ADMIN?`<button onclick="deleteCalcuttaEntry(${e.id})" style="background:none;border:none;color:var(--red);cursor:pointer;margin-left:8px;font-size:12px;">✕</button>`:''}
+        </span>
+      </div>`).join('')}
+      <div style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px;font-weight:700;color:${pctLeft>0?'#8b6914':'#0a5c36'};">
+        ${pctLeft>0?`${pctLeft.toFixed(0)}% remaining — add buyers below`:'✓ Fully sold'}
+      </div>
+    </div>`;
+  } else {
+    existingEl.innerHTML='';
+  }
+
+  // Clear rows and add one blank row to start
+  caRowCount=0;
+  rowsEl.innerHTML='';
+  addCalcuttaBuyerRow();
+  updateCalcuttaRemaining();
+}
+
+function addCalcuttaBuyerRow(){
+  const rowsEl=document.getElementById('ca-buyer-rows');
+  if(!rowsEl) return;
+  const idx=caRowCount++;
+  const allBuyers=[...golfers.map(g=>g.name),...new Set(calcuttaData.map(c=>c.buyer_name))];
+  const row=document.createElement('div');
+  row.id=`ca-row-${idx}`;
+  row.style.cssText='display:grid;grid-template-columns:1fr 70px 90px 1fr auto;gap:8px;align-items:center;margin-bottom:8px;';
+  row.innerHTML=`
+    ${idx===0?`<div style="display:contents;">
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;padding-bottom:2px;">Buyer Name</div>
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;padding-bottom:2px;">%</div>
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;padding-bottom:2px;">$ Amount</div>
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;padding-bottom:2px;">Notes</div>
+      <div></div>
+    </div>`:''}
+    <input type="text" id="ca-row-name-${idx}" placeholder="Buyer name" list="ca-buyer-list"
+      oninput="updateCalcuttaRemaining()"
+      style="border:1px solid var(--border);border-radius:2px;padding:8px 10px;font-size:13px;font-family:'Inter',sans-serif;width:100%;">
+    <input type="number" id="ca-row-pct-${idx}" placeholder="%" min="1" max="100" step="1"
+      oninput="updateCalcuttaRemaining()"
+      style="border:1px solid var(--border);border-radius:2px;padding:8px 10px;font-size:13px;font-family:'Inter',sans-serif;width:100%;">
+    <input type="number" id="ca-row-amt-${idx}" placeholder="$" min="0" step="1"
+      style="border:1px solid var(--border);border-radius:2px;padding:8px 10px;font-size:13px;font-family:'Inter',sans-serif;width:100%;">
+    <input type="text" id="ca-row-notes-${idx}" placeholder="Notes (optional)"
+      style="border:1px solid var(--border);border-radius:2px;padding:8px 10px;font-size:13px;font-family:'Inter',sans-serif;width:100%;">
+    <button onclick="removeCalcuttaRow(${idx})" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:4px 8px;" title="Remove row">×</button>
+  `;
+  rowsEl.appendChild(row);
+
+  // Add datalist for buyer names autocomplete
+  if(!document.getElementById('ca-buyer-list')){
+    const dl=document.createElement('datalist');
+    dl.id='ca-buyer-list';
+    allBuyers.forEach(n=>{const o=document.createElement('option');o.value=n;dl.appendChild(o);});
+    document.body.appendChild(dl);
+  }
+  updateCalcuttaRemaining();
+}
+
+function removeCalcuttaRow(idx){
+  const row=document.getElementById(`ca-row-${idx}`);
+  if(row) row.remove();
+  updateCalcuttaRemaining();
+}
+
+function updateCalcuttaRemaining(){
+  const gid=parseInt(document.getElementById('ca-golfer')?.value||'0');
+  const remEl=document.getElementById('ca-remaining');
+  if(!remEl) return;
+  if(!gid){remEl.textContent='';return;}
+
+  const existingPct=calcuttaData.filter(c=>c.golfer_id===gid).reduce((s,c)=>s+parseFloat(c.percentage),0);
+  let rowPct=0;
+  for(let i=0;i<caRowCount;i++){
+    const p=parseFloat(document.getElementById(`ca-row-pct-${i}`)?.value||0);
+    if(!isNaN(p)) rowPct+=p;
+  }
+  const total=existingPct+rowPct;
+  const left=100-total;
+  const color=left<0?'var(--red)':left===0?'#0a5c36':'var(--text-muted)';
+  remEl.innerHTML=`<span style="color:${color};font-weight:700;">${left<0?'⚠️ Over by '+Math.abs(left).toFixed(0)+'%':left===0?'✓ 100% allocated':left.toFixed(0)+'% remaining'}</span>`;
+}
+
+async function saveAllCalcuttaRows(){
+  const gid=parseInt(document.getElementById('ca-golfer')?.value||'0');
   const errEl=document.getElementById('ca-error');
   errEl.style.display='none';
+  if(!gid){errEl.textContent='Please select a golfer.';errEl.style.display='';return;}
 
-  if(!golferId){errEl.textContent='Please select a golfer.';errEl.style.display='';return;}
-  if(!buyerName){errEl.textContent='Please enter a buyer name.';errEl.style.display='';return;}
-  if(!pct||pct<=0||pct>100){errEl.textContent='Percentage must be between 1 and 100.';errEl.style.display='';return;}
-  if(isNaN(amt)||amt<0){errEl.textContent='Please enter a valid dollar amount.';errEl.style.display='';return;}
+  // Collect all rows with data
+  const rows=[];
+  for(let i=0;i<caRowCount;i++){
+    const nameEl=document.getElementById(`ca-row-name-${i}`);
+    const pctEl=document.getElementById(`ca-row-pct-${i}`);
+    const amtEl=document.getElementById(`ca-row-amt-${i}`);
+    const notesEl=document.getElementById(`ca-row-notes-${i}`);
+    if(!nameEl) continue; // row was removed
+    const name=(nameEl.value||'').trim();
+    const pct=parseFloat(pctEl?.value||0);
+    const amt=parseFloat(amtEl?.value||0);
+    const notes=(notesEl?.value||'').trim();
+    if(!name&&!pct) continue; // empty row, skip
+    if(!name){errEl.textContent=`Row ${i+1}: buyer name is required.`;errEl.style.display='';return;}
+    if(!pct||pct<=0){errEl.textContent=`Row ${i+1}: percentage must be greater than 0.`;errEl.style.display='';return;}
+    if(isNaN(amt)||amt<0){errEl.textContent=`Row ${i+1}: enter a valid dollar amount.`;errEl.style.display='';return;}
+    rows.push({golfer_id:gid,buyer_name:name,percentage:pct,amount:amt,notes:notes||null});
+  }
 
-  const existingPct=calcuttaData.filter(c=>c.golfer_id===golferId).reduce((s,c)=>s+parseFloat(c.percentage),0);
-  if(existingPct+pct>100.01){
-    errEl.textContent=`Only ${(100-existingPct).toFixed(0)}% remaining for this golfer.`;
+  if(!rows.length){errEl.textContent='Add at least one buyer row.';errEl.style.display='';return;}
+
+  // Check total % doesn't exceed 100
+  const existingPct=calcuttaData.filter(c=>c.golfer_id===gid).reduce((s,c)=>s+parseFloat(c.percentage),0);
+  const newPct=rows.reduce((s,r)=>s+r.percentage,0);
+  if(existingPct+newPct>100.01){
+    errEl.textContent=`Total ownership would be ${(existingPct+newPct).toFixed(0)}% — exceeds 100%. Adjust percentages.`;
     errEl.style.display='';return;
   }
 
-  const {data,error}=await sb.from('calcutta').insert({golfer_id:golferId,buyer_name:buyerName,percentage:pct,amount:amt,notes:notes||null}).select();
+  // Save all rows
+  const {data,error}=await sb.from('calcutta').insert(rows).select();
   if(error){showToast(`⚠️ Save failed: ${error.message}`);return;}
   calcuttaData.push(...(data||[]));
-  document.getElementById('ca-buyer').value='';
-  document.getElementById('ca-pct').value='';
-  document.getElementById('ca-amt').value='';
-  document.getElementById('ca-notes').value='';
+
+  // Reset rows panel, keep golfer selected
+  const savedGid=gid;
+  window._lastCalcuttaGolferId=String(savedGid);
+  caRowCount=0;
+  const rowsEl=document.getElementById('ca-buyer-rows');
+  if(rowsEl) rowsEl.innerHTML='';
   renderCalcutta();
-  showToast('✓ Entry added!');
+  setTimeout(()=>onCalcuttaGolferChange(String(savedGid)),50);
+  showToast(`✓ ${rows.length} buyer${rows.length>1?'s':''} saved for ${golfers.find(g=>g.id===savedGid)?.name}!`);
 }
+
+// ---- END CALCUTTA MULTI-ROW PANEL ----
 
 async function deleteCalcuttaEntry(id){
   if(!IS_ADMIN){showToast('Admin only.');return;}
