@@ -2828,6 +2828,19 @@ async function resetRoundScores(r){
   renderScoringAdmin();
 }
 
+async function resetShootout(){
+  if(!confirm('⚠️ This will wipe all shootout hole scores AND all elimination/champion statuses. Cannot be undone. Continue?')) return;
+  showToast('Wiping shootout data...');
+  await Promise.all([
+    sb.from('shootout_hole_scores').delete().neq('id',0),
+    sb.from('shootout').delete().neq('id',0),
+  ]);
+  shootoutHoleScores={};
+  shootoutSt={};
+  renderShootout();
+  showToast('✓ Shootout wiped clean!');
+}
+
 async function resetTeamCup(){
   if(!confirm('⚠️ This will clear the Team Cup setup — captains, team names, player assignments, and R3/R6 match lineups. Round 3 & 6 pairings will reset to default placeholders. Continue?')) return;
   showToast('Resetting Team Cup...');
@@ -3309,6 +3322,9 @@ function renderScoringAdmin(){
       <div class="flex-gap" style="margin-bottom:12px;">
         <button class="btn btn-sm" onclick="resetAllScores()" style="background:#8b1a1a;color:#fff;border:none;padding:8px 18px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">
           ⚠️ Wipe ALL Scores (All Rounds)
+        </button>
+        <button class="btn btn-sm" onclick="resetShootout()" style="background:#8b1a1a;color:#fff;border:none;padding:8px 18px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">
+          ⚠️ Wipe Shootout Scores &amp; Eliminations
         </button>
         <button class="btn btn-sm" onclick="resetTeamCup()" style="background:#8b1a1a;color:#fff;border:none;padding:8px 18px;border-radius:2px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;">
           ⚠️ Reset Team Cup Only (Captains/Teams/R3+R6 Lineups)
