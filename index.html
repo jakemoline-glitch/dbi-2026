@@ -4683,13 +4683,32 @@ function renderCalcutta(){
     {place:5,pct:4.5, label:'5th Place'},
   ];
   const CHARITY_PCT=10;
-  const rankedGolfers=[...golfers].map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total);
-  const rankedWithTies=assignRanks(rankedGolfers,g=>g.total,false);
+
+  // Rank by SHOOTOUT result — champion = 1st, then by elimination hole descending (later out = better finish)
+  // Players who didn't make the shootout are unranked for payout purposes
+  const top10ByDbi=[...golfers].map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total).slice(0,10);
+  const top10Ids=new Set(top10ByDbi.map(g=>g.id));
+
+  // Build shootout finish order
+  const shootoutFinish=top10ByDbi.map(g=>{
+    const so=shootoutSt[g.id];
+    const status=so?.status||'active';
+    const elimHole=parseInt(so?.eliminated_hole||0);
+    // Sort key: champion=99, else eliminated_hole (later = better)
+    const sortKey=status==='champion'?99:elimHole||0;
+    return {...g,status,elimHole,sortKey};
+  }).sort((a,b)=>b.sortKey-a.sortKey);
+
+  // Assign ranks with tie handling (same elimHole = tied)
+  const shootoutRanked=assignRanks(shootoutFinish,g=>-g.sortKey,true);
+
+  // Is shootout complete? (champion declared)
+  const shootoutDone=top10ByDbi.some(g=>shootoutSt[g.id]?.status==='champion');
   const roundsScored=[1,2,3,4,5,6].filter(r=>roundResults[r]&&Object.keys(roundResults[r]).length>0).length;
-  // Consider shootout complete if there's a champion
-  const shootoutChamp=Object.entries(shootoutSt).find(([,s])=>s.status==='champion');
-  const isComplete=roundsScored===6;
-  const statusLabel=isComplete?'✓ Final':'⏳ Projected — '+roundsScored+'/6 rounds complete';
+  const isComplete=shootoutDone;
+  const statusLabel=isComplete?'✓ Final — Shootout Complete':
+    roundsScored<6?`⏳ Projected — ${roundsScored}/6 rounds + shootout pending`:
+    '⏳ Projected — Shootout pending';
 
   const charity=totalPot*(CHARITY_PCT/100);
 
@@ -4701,7 +4720,7 @@ function renderCalcutta(){
       </span>
     </div>
     <div style="padding:6px 16px;background:#f8f4ec;border-bottom:1px solid var(--border);font-size:11px;color:var(--text-muted);">
-      Placement based on total DBI points across all 6 rounds (including Team Cup bonus). Projected until all rounds are finalized.
+      Placement based on <strong>Shootout finishing position</strong> — Champion = 1st, then by elimination hole (later out = better finish). Projected until shootout is complete.
     </div>
     <div style="padding:0;">`;
 
@@ -4721,7 +4740,7 @@ function renderCalcutta(){
   const placesHandled=new Set();
   PAYOUT_PCTS.forEach(({place,pct,label})=>{
     if(placesHandled.has(place)) return;
-    const atPlace=rankedWithTies.filter(g=>g.rank===place);
+    const atPlace=shootoutRanked.filter(g=>g.rank===place);
     const tiedCount=atPlace.length||1;
     // Pool pcts for all tied positions
     let poolPct=0;
@@ -4734,7 +4753,7 @@ function renderCalcutta(){
 
     if(!atPlace.length){
       html+=`<div style="padding:12px 18px;border-bottom:1px solid var(--border);opacity:0.4;">
-        <div style="font-weight:600;color:var(--text-muted);">${label} — not yet determined</div>
+        <div style="font-weight:600;color:var(--text-muted);">${label} — shootout result pending</div>
       </div>`;
       return;
     }
@@ -4751,7 +4770,7 @@ function renderCalcutta(){
           <div style="font-size:22px;">${placeMedal}</div>
           <div style="flex:1;">
             <div style="font-weight:700;font-size:14px;">${label}${isTied?` <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(tied)</span>`:''} — ${g.name}</div>
-            <div style="font-size:11px;color:var(--text-muted);">${g.total} DBI pts · ${perGolferPct.toFixed(1)}% of pot${isTied?` (split ${tiedCount} ways)`:''}</div>
+            <div style="font-size:11px;color:var(--text-muted);">${g.status==='champion'?'🏆 Champion':g.elimHole?'Eliminated Hole '+g.elimHole:'Still active'} · ${perGolferPct.toFixed(1)}% of pot${isTied?` (split ${tiedCount} ways)`:''}</div>
           </div>
           <div style="text-align:right;">
             <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:${placeColor};">
