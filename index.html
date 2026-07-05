@@ -626,17 +626,16 @@ const WILD_HORSE = {
   defaultTee: 'Black',
 };
 
-// Bayside Golf Club — Brule, NE (Par 71/72 — front par 35 or 36 depending on hole 6 tee)
-// Source: Official Bayside scorecard PDF
+// Source: Official Bayside Golf Club scorecard PDF (baysidegolf.com)
 const BAYSIDE = {
   name: 'Bayside Golf Club',
   location: 'Brule, NE',
-  par: [5,3,4,5,3,4,4,3,4, 4,5,4,3,4,5,4,3,4],
+  par:  [5,3,4,5,3,4,4,3,4, 4,5,4,3,4,5,4,3,4], // hole 6: par 4 from Black/Blue; par 5 from shorter tees
   hdcp: [14,12,10,18,8,2,16,6,4, 7,1,11,3,15,5,13,17,9],
   tees: {
     'Black': {yards:[540,158,403,468,150,461,307,178,410, 357,652,400,205,380,616,308,138,415], rating:71.7, slope:135, color:'#1a1a1a'},
-    'Blue':  {yards:[481,130,387,448,134,458,286,160,372, 340,600,384,184,594,293,120,395,358], rating:70.4, slope:131, color:'#1a3a5c'},
-    'White': {yards:[467,120,373,425,133,415,276,146,363, 320,555,356,165,560,277,115,379,317], rating:69.0, slope:128, color:'#ccc'},
+    'Blue':  {yards:[481,130,387,448,134,458,286,160,372, 340,600,356,184,317,594,293,120,395], rating:70.4, slope:131, color:'#1a3a5c'},
+    'White': {yards:[467,120,373,425,133,415,276,146,363, 320,555,356,165,317,560,277,115,379], rating:69.0, slope:128, color:'#ccc'},
     'Gold':  {yards:[402,109,358,398,126,372,238,140,313, 245,512,338,142,266,519,250,115,300], rating:65.9, slope:120, color:'#c9a227'},
     'Red':   {yards:[355,77,233,307,104,341,215,124,285,  209,428,246,116,224,425,214,109,270], rating:68.6, slope:119, color:'#8b2020'},
   },
