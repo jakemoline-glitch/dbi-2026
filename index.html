@@ -4979,11 +4979,10 @@ async function renderTeamCup(){
   // ---- ADMIN SETUP (admin only) ----
   if(IS_ADMIN){
     html+=`<div class="card admin-only"><div class="card-header" style="justify-content:space-between;">
-      <span>⚙️ Admin: Team Setup</span><span class="badge">Admin Only</span>
+      <span>⚙️ Step 1: Set Captains</span><span class="badge">Admin Only</span>
     </div><div class="card-body">
 
       <div style="margin-bottom:20px;">
-        <p style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Team Names &amp; Captains</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
             <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">Team A Name <span style="color:var(--gold);">(auto from captain)</span></label>
@@ -5007,8 +5006,13 @@ async function renderTeamCup(){
         <button class="btn btn-primary btn-sm" style="margin-top:12px;" onclick="saveTeamSetup()">Save Team Names &amp; Captains</button>
       </div>
 
-      <div style="margin-bottom:20px;">
-        <p style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Assign Players to Teams</p>
+    </div></div>
+
+    <div class="card admin-only" style="margin-bottom:16px;"><div class="card-header" style="justify-content:space-between;">
+      <span>⚙️ Step 2: Assign Players to Teams</span><span class="badge">After Draft</span>
+    </div><div class="card-body">
+
+      <div style="margin-bottom:4px;">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:12px;">
           <div style="font-weight:700;color:var(--text-muted);padding:4px 0;">Golfer</div>
           <div style="font-weight:700;color:#0a5c36;padding:4px 0;">Team A</div>
@@ -5021,25 +5025,28 @@ async function renderTeamCup(){
         </div>
       </div>
 
-      <div>
-        <p style="font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Match Lineups</p>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Set the 2-person pairings for each match in Rounds 3 &amp; 6. The captain who paid most in Calcutta puts out match 1 in R3 and match 2 in R6 (snake order).</p>
-        ${[3,6].map(r=>`
-        <div style="margin-bottom:16px;">
-          <p style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px;">Round ${r} — ${RNAMES[r]}</p>
-          <table class="data-table"><thead><tr><th>#</th><th style="color:#0a5c36;">Team A Player 1</th><th style="color:#0a5c36;">Team A Player 2</th><th style="color:#8b1a1a;">Team B Player 1</th><th style="color:#8b1a1a;">Team B Player 2</th></tr></thead><tbody>
-          ${[1,2,3,4,5].map(m=>{
-            const match=teamMatches[r]?.[m]||{};
-            const mkSel=(id,field)=>`<select onchange="setMatchPlayer(${r},${m},'${field}',+this.value)" style="border:1px solid var(--border);border-radius:2px;padding:4px 6px;font-size:12px;width:100%;">
-              <option value="0">Select...</option>
-              ${golfers.filter(g=>!field.startsWith('b')?teamPlayers[g.id]==='A':teamPlayers[g.id]==='B').map(g=>`<option value="${g.id}" ${g.id===match[field]?'selected':''}>${g.name} (${g.hdcp})</option>`).join('')}
-            </select>`;
-            return `<tr><td><strong>${m}</strong></td><td>${mkSel(match.a1,'a1')}</td><td>${mkSel(match.a2,'a2')}</td><td>${mkSel(match.b1,'b1')}</td><td>${mkSel(match.b2,'b2')}</td></tr>`;
-          }).join('')}
-          </tbody></table>
-          <button class="btn btn-gold btn-sm" style="margin-top:8px;" onclick="saveMatchLineup(${r})">💾 Save Round ${r} Lineups</button>
-        </div>`).join('')}
-      </div>
+    </div></div>
+
+    <div class="card admin-only"><div class="card-header" style="justify-content:space-between;">
+      <span>⚙️ Step 3: Match Lineups</span>
+      <span class="badge" style="background:#8b6914;">Set Night Before R3 &amp; R6</span>
+    </div><div class="card-body">
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Set the 2-person pairings for each match in Rounds 3 &amp; 6. Do this after teams are drafted — you don't need to fill this out now.</p>
+      ${[3,6].map(r=>`
+      <div style="margin-bottom:16px;">
+        <p style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px;">Round ${r} — ${RNAMES[r]}</p>
+        <table class="data-table"><thead><tr><th>#</th><th style="color:#0a5c36;">Team A Player 1</th><th style="color:#0a5c36;">Team A Player 2</th><th style="color:#8b1a1a;">Team B Player 1</th><th style="color:#8b1a1a;">Team B Player 2</th></tr></thead><tbody>
+        ${[1,2,3,4,5].map(m=>{
+          const match=teamMatches[r]?.[m]||{};
+          const mkSel=(id,field)=>`<select onchange="setMatchPlayer(${r},${m},'${field}',+this.value)" style="border:1px solid var(--border);border-radius:2px;padding:4px 6px;font-size:12px;width:100%;">
+            <option value="0">Select...</option>
+            ${golfers.filter(g=>!field.startsWith('b')?teamPlayers[g.id]==='A':teamPlayers[g.id]==='B').map(g=>`<option value="${g.id}" ${g.id===match[field]?'selected':''}>${g.name} (${g.hdcp})</option>`).join('')}
+          </select>`;
+          return `<tr><td><strong>${m}</strong></td><td>${mkSel(match.a1,'a1')}</td><td>${mkSel(match.a2,'a2')}</td><td>${mkSel(match.b1,'b1')}</td><td>${mkSel(match.b2,'b2')}</td></tr>`;
+        }).join('')}
+        </tbody></table>
+        <button class="btn btn-gold btn-sm" style="margin-top:8px;" onclick="saveMatchLineup(${r})">💾 Save Round ${r} Lineups</button>
+      </div>`).join('')}
     </div></div>`;
   }
 
