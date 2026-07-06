@@ -4856,6 +4856,20 @@ async function renderTeamCup(){
   const totalA=r3pts.teamAPts+r6pts.teamAPts;
   const totalB=r3pts.teamBPts+r6pts.teamBPts;
 
+  // Compute team bonus HTML here (needed in scoreboard below)
+  let teamBonusHtml='';
+  if(IS_ADMIN&&totalA!==totalB){
+    const winTeam2=totalA>totalB?'A':'B';
+    const winnerIds2=golfers.filter(g=>teamPlayers[g.id]===winTeam2).map(g=>g.id);
+    const alreadyAwarded2=winnerIds2.some(gid=>roundResults[6]?.[gid]?.team_bonus_points>0);
+    const winnerName2=totalA>totalB?(teamComp.team_a_name||'Team A'):(teamComp.team_b_name||'Team B');
+    if(alreadyAwarded2){
+      teamBonusHtml='<div style="padding:10px 16px;background:#0a2e18;border-top:1px solid var(--gold);text-align:center;"><span style="font-size:12px;color:#70d490;">✓ 5 DBI bonus points already awarded to '+winnerName2+' — auto-applied when Round 6 was calculated.</span></div>';
+    } else {
+      teamBonusHtml='<div style="padding:12px 16px;background:#0a1628;border-top:1px solid var(--gold);text-align:center;"><button class="btn btn-gold" onclick="awardTeamCupBonus()" style="font-size:13px;padding:10px 24px;">🏆 Award 5 DBI Bonus Points to '+winnerName2+' Winners</button><p style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:6px;">Auto-awarded when Round 6 is calculated. Use only if needed manually.</p></div>';
+    }
+  }
+
   let html='';
 
   // ---- SCOREBOARD ----
