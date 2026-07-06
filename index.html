@@ -4376,14 +4376,20 @@ function renderCalcutta(){
     byGolfer[c.golfer_id].totalAmt+=parseFloat(c.amount);
   });
 
-  const buyerTotals={};
-  calcuttaData.forEach(c=>{
-    if(!buyerTotals[c.buyer_name]) buyerTotals[c.buyer_name]=0;
-    buyerTotals[c.buyer_name]+=parseFloat(c.amount);
-  });
-  const buyerRanked=Object.entries(buyerTotals).sort((a,b)=>b[1]-a[1]);
-  const topBuyer=buyerRanked[0]?.[0];
-  const secondBuyer=buyerRanked[1]?.[0];
+  // Captain = buyer of the most expensive golfer (highest total sale price per golfer)
+  // Sort golfers by total auction price descending
+  const golfersByPrice=[...golfers].map(g=>{
+    const entries=calcuttaData.filter(c=>c.golfer_id===g.id);
+    const totalPrice=entries.reduce((s,c)=>s+parseFloat(c.amount),0);
+    // Find who owns the majority (or most) of this golfer
+    const topOwner=entries.sort((a,b)=>parseFloat(b.percentage)-parseFloat(a.percentage))[0];
+    return {...g,totalPrice,topOwner:topOwner?.buyer_name||null,entries};
+  }).filter(g=>g.totalPrice>0).sort((a,b)=>b.totalPrice-a.totalPrice);
+
+  const topGolfer=golfersByPrice[0];
+  const secondGolfer=golfersByPrice[1];
+  const topBuyer=topGolfer?.topOwner||null;
+  const secondBuyer=secondGolfer?.topOwner||null;
   const totalPot=calcuttaData.reduce((s,c)=>s+parseFloat(c.amount),0);
 
   let html='';
@@ -4398,16 +4404,16 @@ function renderCalcutta(){
     </div>
     ${topBuyer?`<div class="card" style="background:#0a2e18;color:white;">
       <div class="card-body" style="text-align:center;">
-        <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#70d490;margin-bottom:4px;">Top Spender · Captain A</div>
+        <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#70d490;margin-bottom:4px;">Highest Bid Golfer · Captain A</div>
         <div style="font-size:18px;font-weight:700;color:#70d490;">${topBuyer}</div>
-        <div style="font-size:14px;color:rgba(255,255,255,0.6);">$${buyerTotals[topBuyer].toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.6);">owns ${topGolfer.name} · sold for $${topGolfer.totalPrice.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
       </div>
     </div>`:''}
     ${secondBuyer?`<div class="card" style="background:#3a0a0a;color:white;">
       <div class="card-body" style="text-align:center;">
-        <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#f08080;margin-bottom:4px;">2nd Spender · Captain B</div>
+        <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#f08080;margin-bottom:4px;">2nd Highest Bid Golfer · Captain B</div>
         <div style="font-size:18px;font-weight:700;color:#f08080;">${secondBuyer}</div>
-        <div style="font-size:14px;color:rgba(255,255,255,0.6);">$${buyerTotals[secondBuyer].toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.6);">owns ${secondGolfer.name} · sold for $${secondGolfer.totalPrice.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
       </div>
     </div>`:''}
   </div>`;
@@ -4491,23 +4497,24 @@ function renderCalcutta(){
   });
   html+=`</tbody></table></div></div>`;
 
-  // Buyer leaderboard
-  if(buyerRanked.length){
-    html+=`<div class="card" style="margin-top:16px;"><div class="card-header"><span>💸 Buyer Leaderboard</span></div><div style="padding:0;">`;
-    buyerRanked.forEach(([name,amt],i)=>{
+  // Captain standings — ranked by the sale price of their most expensive golfer
+  if(golfersByPrice.length){
+    html+=`<div class="card" style="margin-top:16px;"><div class="card-header"><span>👑 Captain Standings — By Golfer Sale Price</span></div><div style="padding:0;">`;
+    golfersByPrice.slice(0,10).forEach((g,i)=>{
       const isTop=i===0,isSecond=i===1;
       const bg=isTop?'#0a2e18':isSecond?'#3a0a0a':'';
       const col=isTop?'#70d490':isSecond?'#f08080':'var(--text)';
       const label=isTop?'👑 Captain A':isSecond?'👑 Captain B':`${i+1}.`;
-      const owned=calcuttaData.filter(c=>c.buyer_name===name);
-      const golferNames=[...new Set(owned.map(c=>golfers.find(g=>g.id===c.golfer_id)?.name?.split(' ')[0]||'?'))];
+      const majority=g.topOwner||'—';
+      const ownerList=g.entries.map(e=>`${e.buyer_name} (${parseFloat(e.percentage).toFixed(0)}%)`).join(', ');
       html+=`<div style="display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:1px solid ${bg?'rgba(255,255,255,0.1)':'var(--border)'};background:${bg};">
         <div style="font-size:15px;font-weight:700;color:${bg?col:'var(--text-muted)'};min-width:90px;">${label}</div>
         <div style="flex:1;">
-          <div style="font-weight:700;font-size:14px;color:${bg?'white':'var(--text)'};">${name}</div>
-          <div style="font-size:11px;color:${bg?'rgba(255,255,255,0.5)':'var(--text-muted)'};">Owns pieces of: ${golferNames.join(', ')||'—'}</div>
+          <div style="font-weight:700;font-size:14px;color:${bg?'white':'var(--text)'};">${g.name} <span style="font-size:11px;font-weight:400;color:${bg?'rgba(255,255,255,0.5)':'var(--text-muted)'};">HDCP ${g.hdcp}</span></div>
+          <div style="font-size:11px;color:${bg?'rgba(255,255,255,0.5)':'var(--text-muted)'};">${ownerList||'—'}</div>
+          ${(isTop||isSecond)&&majority?`<div style="font-size:11px;font-weight:700;color:${col};margin-top:2px;">Captain: ${majority}</div>`:''}
         </div>
-        <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:${bg?'var(--gold)':'var(--navy)'};">$${amt.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
+        <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:${bg?'var(--gold)':'var(--navy)'};">$${g.totalPrice.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}</div>
       </div>`;
     });
     html+=`</div></div>`;
