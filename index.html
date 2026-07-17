@@ -6,6 +6,7 @@
 <title>2026 Dirty Birdie Invitational</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
 :root{
   --navy:#0a1628;--navy-mid:#152340;--navy-light:#1e3560;--navy-faint:#243d6e;
@@ -563,37 +564,24 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:var(--text);min
 
 <!-- GOOGLE SHEETS BACKUP (admin only) -->
 <div id="tab-sheets" class="tab-content">
-  <div class="section-title">📊 Google Sheets Backup</div>
-  <p class="section-sub">Export all scores and leaderboard data to Google Sheets as a backup. Admin only.</p>
-  <div class="card"><div class="card-header"><span>Sheets Configuration</span><span class="badge">Admin</span></div>
-  <div class="card-body">
-    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Paste your Google Sheets ID below (from the URL: docs.google.com/spreadsheets/d/<strong>SHEET_ID</strong>/edit). The sheet must have "Anyone with the link can edit" sharing enabled, and you need to set up the Apps Script web app endpoint.</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
-      <input type="text" id="sheets-id" placeholder="Google Sheets ID or Apps Script URL" value="${localStorage.getItem('dbi26_sheets_url')||''}"
-        style="border:1px solid var(--border);border-radius:2px;padding:8px 12px;font-size:13px;font-family:'Inter',sans-serif;flex:1;min-width:200px;">
-      <button class="btn btn-primary" onclick="saveSheetConfig()">Save</button>
-    </div>
-    <div style="background:var(--cream);border:1px solid var(--border);border-radius:2px;padding:14px;font-size:12px;color:var(--text-muted);margin-bottom:14px;">
-      <strong style="color:var(--navy);">Quick Setup:</strong><br>
-      1. Open your Google Sheet → Extensions → Apps Script<br>
-      2. Paste the script below → Deploy → New deployment → Web app → Anyone can access → Copy the URL<br>
-      3. Paste that URL above and save
-      <button class="btn btn-sm btn-gold" style="margin-top:8px;" onclick="copyAppsScript()">📋 Copy Apps Script Code</button>
-    </div>
-  </div></div>
+  <div class="section-title">📊 Export to Excel</div>
+  <p class="section-sub">Download scores and results as an Excel file (.xlsx) for backup. Admin only.</p>
 
-  <div class="card"><div class="card-header" style="justify-content:space-between;"><span>Export Data</span>
-    <button class="btn btn-gold btn-sm" onclick="exportAllToSheets()">⬆️ Export All to Sheets</button>
+  <div class="card"><div class="card-header" style="justify-content:space-between;">
+    <span>Download Options</span>
+    <button class="btn btn-gold" onclick="exportAllExcel()">⬇️ Download Full Workbook</button>
   </div><div class="card-body" style="padding:0;">
-    <table class="data-table"><thead><tr><th>Export</th><th>Description</th><th>Action</th></tr></thead><tbody>
-      <tr><td><strong>Leaderboard</strong></td><td>All golfers, DBI points per round, totals</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet('leaderboard')">Export</button></td></tr>
-      <tr><td><strong>Round 1 Scores</strong></td><td>Hole-by-hole + Stableford + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(1)">Export</button></td></tr>
-      <tr><td><strong>Round 2 Scores</strong></td><td>Team scramble scores + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(2)">Export</button></td></tr>
-      <tr><td><strong>Round 3 Scores</strong></td><td>Match play Nassau results + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(3)">Export</button></td></tr>
-      <tr><td><strong>Round 4 Scores</strong></td><td>Shamble net scores + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(4)">Export</button></td></tr>
-      <tr><td><strong>Round 5 Scores</strong></td><td>Hole-by-hole + net scores + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(5)">Export</button></td></tr>
-      <tr><td><strong>Round 6 Scores</strong></td><td>Match play Nassau results + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet(6)">Export</button></td></tr>
-      <tr><td><strong>All Hole Scores</strong></td><td>Every hole score for every golfer across all rounds</td><td><button class="btn btn-sm btn-primary" onclick="exportSheet('holes')">Export</button></td></tr>
+    <table class="data-table"><thead><tr><th>Sheet</th><th>Contents</th><th>Download</th></tr></thead><tbody>
+      <tr><td><strong>Full Workbook</strong></td><td>All sheets in one .xlsx file</td><td><button class="btn btn-sm btn-gold" onclick="exportAllExcel()">⬇️ All</button></td></tr>
+      <tr><td><strong>Leaderboard</strong></td><td>DBI points per round + totals for all 20 golfers</td><td><button class="btn btn-sm btn-primary" onclick="exportExcelSheet('leaderboard')">⬇️</button></td></tr>
+      <tr><td><strong>Round 1</strong></td><td>Hole-by-hole + Stableford + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportExcelSheet(1)">⬇️</button></td></tr>
+      <tr><td><strong>Round 2</strong></td><td>Team scramble scores + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportExcelSheet(2)">⬇️</button></td></tr>
+      <tr><td><strong>Round 3</strong></td><td>Match play Nassau results + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportExcelSheet(3)">⬇️</button></td></tr>
+      <tr><td><strong>Round 4</strong></td><td>Shamble scores + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportExcelSheet(4)">⬇️</button></td></tr>
+      <tr><td><strong>Round 5</strong></td><td>Hole-by-hole net scores + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportExcelSheet(5)">⬇️</button></td></tr>
+      <tr><td><strong>Round 6</strong></td><td>Match play Nassau results + DBI pts</td><td><button class="btn btn-sm btn-primary" onclick="exportExcelSheet(6)">⬇️</button></td></tr>
+      <tr><td><strong>All Hole Scores</strong></td><td>Every hole score for every golfer across all rounds</td><td><button class="btn btn-sm btn-primary" onclick="exportExcelSheet('holes')">⬇️</button></td></tr>
+      <tr><td><strong>Calcutta</strong></td><td>All ownership entries + payouts</td><td><button class="btn btn-sm btn-primary" onclick="exportExcelSheet('calcutta')">⬇️</button></td></tr>
     </tbody></table>
   </div></div>
   <div id="sheets-status" style="display:none;" class="card"><div class="card-body" style="font-size:13px;color:var(--navy);font-weight:600;"></div></div>
@@ -3746,96 +3734,105 @@ async function runCalc(r){
 }
 
 // ===================== GOOGLE SHEETS BACKUP =====================
-function saveSheetConfig(){
-  const url=document.getElementById('sheets-id')?.value?.trim();
-  if(url){localStorage.setItem('dbi26_sheets_url',url);showToast('Sheets URL saved!');}
-}
+// ===================== EXCEL EXPORT =====================
 
-const APPS_SCRIPT=`// DBI 2026 Google Sheets Apps Script
-// Deploy as Web App: Execute as Me, Anyone can access
-function doPost(e) {
-  const data = JSON.parse(e.postData.contents);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(data.sheet);
-  if (!sheet) sheet = ss.insertSheet(data.sheet);
-  sheet.clearContents();
-  if (data.rows && data.rows.length > 0) {
-    sheet.getRange(1, 1, data.rows.length, data.rows[0].length).setValues(data.rows);
-    sheet.getRange(1, 1, 1, data.rows[0].length).setFontWeight('bold')
-      .setBackground('#1a4a2e').setFontColor('#e8c04a');
-  }
-  return ContentService.createTextOutput(JSON.stringify({success:true}))
-    .setMimeType(ContentService.MimeType.JSON);
-}`;
-
-function copyAppsScript(){
-  navigator.clipboard.writeText(APPS_SCRIPT).then(()=>showToast('Apps Script code copied!')).catch(()=>{
-    const ta=document.createElement('textarea');ta.value=APPS_SCRIPT;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Apps Script code copied!');
+function buildLeaderboardSheet(){
+  const rows=[['Golfer','HDCP','R1','R2','R3','R4','R5','R6','Team Bonus','Total DBI']];
+  const sorted=[...golfers].map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total);
+  sorted.forEach(g=>{
+    rows.push([g.name,g.hdcp,
+      roundResults[1]?.[g.id]?.dbi_points??'',
+      roundResults[2]?.[g.id]?.dbi_points??'',
+      roundResults[3]?.[g.id]?.dbi_points??'',
+      roundResults[4]?.[g.id]?.dbi_points??'',
+      roundResults[5]?.[g.id]?.dbi_points??'',
+      roundResults[6]?.[g.id]?.dbi_points??'',
+      roundResults[6]?.[g.id]?.team_bonus_points??'',
+      g.total]);
   });
+  return rows;
 }
 
-async function sendToSheets(sheetName, rows){
-  const url=localStorage.getItem('dbi26_sheets_url');
-  if(!url){showToast('Set your Apps Script URL in the Sheets tab first!');return false;}
-  try{
-    const resp=await fetch(url,{method:'POST',body:JSON.stringify({sheet:sheetName,rows}),headers:{'Content-Type':'application/json'}});
-    return true;
-  }catch(e){showToast('Sheets export failed — check your Apps Script URL');return false;}
-}
-
-async function exportSheet(which){
-  let rows=[], name='';
-  if(which==='leaderboard'){
-    name='DBI Leaderboard';
-    const ranked=golfers.map(g=>({...g,total:getTotalPts(g.id)})).sort((a,b)=>b.total-a.total);
-    rows=[['Rank','Golfer','HDCP','R1','R2','R3','R4','R5','R6','Total DBI Pts']];
-    ranked.forEach((g,i)=>{
-      rows.push([i+1,g.name,g.hdcp,...[1,2,3,4,5,6].map(r=>getRndPts(g.id,r)??''),g.total]);
-    });
-  } else if(which==='holes'){
-    name='All Hole Scores';
-    rows=[['Golfer','HDCP','Round',...Array.from({length:18},(_,i)=>`H${i+1}`),'Front','Back','Gross','Net']];
-    golfers.forEach(g=>{
-      for(let r=1;r<=6;r++){
-        const sc=holeScores[r]?.[g.id]||{};
-        const hRow=Array.from({length:18},(_,i)=>sc[i+1]||'');
-        const f=hRow.slice(0,9).reduce((a,b)=>a+(+b||0),0);
-        const bk=hRow.slice(9).reduce((a,b)=>a+(+b||0),0);
-        const tot=f+bk;
-        rows.push([g.name,g.hdcp,`Round ${r}`,...hRow,f||'',bk||'',tot||'',tot?tot-parseFloat(g.hdcp):'']);
-      }
-    });
-  } else {
-    const r=which;
-    name=`Round ${r} Scores`;
-    const course=ROUND_COURSE[r];
-    rows=[['Golfer','HDCP',...Array.from({length:18},(_,i)=>`H${i+1}`),'Front','Back','Gross','Net','Stableford','DBI Pts','Place']];
-    golfers.forEach(g=>{
+function buildHoleScoresSheet(){
+  const holes=Array.from({length:18},(_,i)=>i+1);
+  const rows=[['Golfer','HDCP','Round',...holes.map(h=>'H'+h),'Total']];
+  golfers.forEach(g=>{
+    [1,2,3,4,5,6].forEach(r=>{
       const sc=holeScores[r]?.[g.id]||{};
-      const hRow=Array.from({length:18},(_,i)=>sc[i+1]||'');
-      const f=hRow.slice(0,9).reduce((a,b)=>a+(+b||0),0);
-      const bk=hRow.slice(9).reduce((a,b)=>a+(+b||0),0);
-      const tot=f+bk;
-      const sf=r===1?calcStablefordPts(sc,g.hdcp):'';
-      const rr=roundResults[r]?.[g.id];
-      rows.push([g.name,g.hdcp,...hRow,f||'',bk||'',tot||'',tot?Math.round(tot-parseFloat(g.hdcp)):'',sf,rr?.dbi_points??'',rr?.place??'']);
+      const hs=holes.map(h=>sc[h]??'');
+      const tot=hs.filter(v=>v!=='').reduce((a,b)=>a+b,0)||'';
+      rows.push([g.name,g.hdcp,'R'+r,...hs,tot]);
     });
-  }
-  showToast(`Exporting ${name}...`);
-  const ok=await sendToSheets(name,rows);
-  if(ok){
-    showToast(`✓ ${name} exported to Sheets!`);
-    const el=document.getElementById('sheets-status');
-    if(el){el.style.display='block';el.querySelector('.card-body').textContent=`✓ Last export: ${name} at ${new Date().toLocaleTimeString()}`;}
-  }
+  });
+  return rows;
 }
 
-async function exportAllToSheets(){
-  showToast('Exporting all data...');
-  await exportSheet('leaderboard');
-  await exportSheet('holes');
-  for(let r=1;r<=6;r++) await exportSheet(r);
-  showToast('✓ All data exported to Google Sheets!');
+function buildRoundSheet(r){
+  const holes=Array.from({length:18},(_,i)=>i+1);
+  const rows=[['Golfer','HDCP',...holes.map(h=>'H'+h),'Gross','Net','DBI Pts']];
+  golfers.forEach(g=>{
+    const sc=holeScores[r]?.[g.id]||{};
+    const hs=holes.map(h=>sc[h]??'');
+    const gross=hs.filter(v=>v!=='').reduce((a,b)=>a+b,0)||'';
+    const res=roundResults[r]?.[g.id];
+    rows.push([g.name,g.hdcp,...hs,gross,res?.net_score??'',res?.dbi_points??'']);
+  });
+  return rows;
+}
+
+function buildCalcuttaSheet(){
+  const rows=[['Golfer','HDCP','Buyer','% Owned','$ Paid','Notes']];
+  golfers.forEach(g=>{
+    const entries=calcuttaData.filter(c=>c.golfer_id===g.id);
+    if(!entries.length){rows.push([g.name,g.hdcp,'','','','']);return;}
+    entries.forEach(e=>{
+      rows.push([g.name,g.hdcp,e.buyer_name,parseFloat(e.percentage),parseFloat(e.amount),e.notes||'']);
+    });
+  });
+  return rows;
+}
+
+function downloadXlsx(wb,filename){
+  const wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  const blob=new Blob([wbout],{type:'application/octet-stream'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename;a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportExcelSheet(which){
+  if(typeof XLSX==='undefined'){showToast('Excel library not loaded — try again in a moment.');return;}
+  const wb=XLSX.utils.book_new();
+  const date=new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit'}).replace('/','');
+  let name='DBI_'+date;
+  if(which==='leaderboard'){
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(buildLeaderboardSheet()),'Leaderboard');
+    name='DBI_Leaderboard_'+date;
+  } else if(which==='holes'){
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(buildHoleScoresSheet()),'All Hole Scores');
+    name='DBI_AllScores_'+date;
+  } else if(which==='calcutta'){
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(buildCalcuttaSheet()),'Calcutta');
+    name='DBI_Calcutta_'+date;
+  } else if(typeof which==='number'&&which>=1&&which<=6){
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(buildRoundSheet(which)),'Round '+which);
+    name='DBI_Round'+which+'_'+date;
+  }
+  downloadXlsx(wb,name+'.xlsx');
+  showToast('Downloaded '+name+'.xlsx');
+}
+
+function exportAllExcel(){
+  if(typeof XLSX==='undefined'){showToast('Excel library not loaded — try again in a moment.');return;}
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(buildLeaderboardSheet()),'Leaderboard');
+  for(let r=1;r<=6;r++) XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(buildRoundSheet(r)),'Round '+r);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(buildHoleScoresSheet()),'All Hole Scores');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(buildCalcuttaSheet()),'Calcutta');
+  const date=new Date().toLocaleDateString('en-US',{month:'2-digit',day:'2-digit'}).replace('/','');
+  downloadXlsx(wb,'DBI_2026_Full_'+date+'.xlsx');
+  showToast('Downloaded full DBI workbook!');
 }
 
 // ===================== TEAM COMPETITION ENGINE =====================
